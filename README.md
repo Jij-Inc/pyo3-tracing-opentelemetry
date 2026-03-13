@@ -21,6 +21,8 @@ pyo3-tracing-opentelemetry = "0.1"
 
 ## Usage
 
+See the [example crate](./example) for a complete working example.
+
 ### Rust side
 
 ```rust
@@ -98,64 +100,11 @@ with tracer.start_as_current_span("python-parent"):
 
 **Note**: Tracing is initialized once per process. If multiple `TracingBridge` instances with different configurations call `attach_parent_context`, the first one wins and subsequent configurations are ignored (with a warning logged).
 
-## API
-
-### `TracingBridge`
-
-Bridge between Python OpenTelemetry and Rust tracing:
-
-- `TracingBridge::new(name: &'static str)` - Create with same name for service and tracer
-- `service_name: &'static str` - Service name for the OpenTelemetry resource
-- `tracer_name: &'static str` - Tracer name (instrumentation scope name)
-
-Methods:
-
-- `attach_parent_context(&self, py: Python) -> Option<ContextGuard>` - Initialize tracing and attach Python's trace context
-- `initialize(&self, py: Python) -> Option<&'static TracingBridge>` - Initialize tracing, returns `None` if Python OTel is not configured
-
-### Helper Functions
-
-- `extract_context_from_headers(headers: &HashMap<String, String>) -> Option<Context>` - Extract context from W3C headers
-- `get_trace_headers_from_python(py: Python) -> Option<HashMap<String, String>>` - Get W3C headers from Python context
-
 ## Requirements
 
 - Rust 2024 edition
 - PyO3 0.27+
 - Python with `opentelemetry-sdk` installed
-
-## Repository Structure
-
-This is a Cargo workspace with the following members:
-
-```
-pyo3-tracing-opentelemetry/
-├── pyo3-tracing-opentelemetry/   # Main library crate
-│   └── src/lib.rs
-├── example/                       # Example PyO3 module for testing
-│   ├── src/lib.rs
-│   ├── pyproject.toml
-│   └── tests/
-└── Cargo.toml                     # Workspace root
-```
-
-## Development
-
-### Running tests
-
-```bash
-# Rust tests
-cargo test
-
-# Python integration tests
-cd example
-uv sync
-uv run pytest -v
-```
-
-### Example module
-
-The `example/` directory contains a PyO3 module demonstrating the library usage. See `example/src/lib.rs` for usage patterns.
 
 ## License
 
