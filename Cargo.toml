@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/pyo3-tracing-opentelemetry",
-    "crates/example",
+    "pyo3-tracing-opentelemetry",
+    "example",
 ]
 
 [workspace.package]
@@ -20,4 +20,4 @@ pyo3 = { version = "0.27", features = ["anyhow"] }
 tracing = "0.1"
 tracing-opentelemetry = "0.29"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-pyo3-tracing-opentelemetry = { path = "crates/pyo3-tracing-opentelemetry" }
+pyo3-tracing-opentelemetry = { path = "pyo3-tracing-opentelemetry" }
