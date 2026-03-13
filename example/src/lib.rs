@@ -12,6 +12,7 @@ fn tracing_config() -> TracingConfig {
 
 /// A simple traced function that does some work.
 #[pyfunction]
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 fn traced_function(py: Python<'_>) -> PyResult<i32> {
     let _guard = attach_parent_context_from_python_with_config(py, &tracing_config());
 
@@ -37,6 +38,7 @@ fn do_work() -> i32 {
 
 /// A traced function that calls nested spans.
 #[pyfunction]
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 fn nested_spans(py: Python<'_>) -> PyResult<()> {
     let _guard = attach_parent_context_from_python_with_config(py, &tracing_config());
 
@@ -53,6 +55,7 @@ fn nested_spans(py: Python<'_>) -> PyResult<()> {
 
 /// A traced function that emits events with attributes.
 #[pyfunction]
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 fn traced_with_attributes(py: Python<'_>, name: String, count: i32) -> PyResult<()> {
     let _guard = attach_parent_context_from_python_with_config(py, &tracing_config());
 
@@ -76,3 +79,6 @@ fn example_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(traced_with_attributes, m)?)?;
     Ok(())
 }
+
+#[cfg(feature = "stub_gen")]
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

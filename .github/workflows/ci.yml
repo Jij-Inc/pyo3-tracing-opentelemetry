@@ -55,6 +55,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v5
+      - name: Generate stubs and verify they are up-to-date
+        run: |
+          cargo run -p pyo3-tracing-opentelemetry-example --features stub_gen --bin stub_gen
+          mv example-module.pyi example_module.pyi
+          git diff --exit-code example_module.pyi
+        working-directory: .
       - run: uv sync
       - run: uv run pyright
       - run: uv run pytest -v

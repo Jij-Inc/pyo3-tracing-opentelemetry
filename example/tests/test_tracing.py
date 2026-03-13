@@ -15,15 +15,22 @@ def normalize_span(span: ReadableSpan, span_id_map: dict[int, str]) -> dict:
     Replaces dynamic values (trace_id, span_id, timestamps) with stable placeholders.
     Removes timing-related attributes that vary between runs.
     """
-    # Map span_id to a stable name based on span name
-    if span.context.span_id not in span_id_map:
-        span_id_map[span.context.span_id] = f"span_{len(span_id_map)}"
+    # Get span_id (context is always present for ReadableSpan)
+    context = span.context
+    assert context is not None
+    span_id = context.span_id
+
+    # Map span_id to a stable name
+    if span_id not in span_id_map:
+        span_id_map[span_id] = f"span_{len(span_id_map)}"
 
     parent_id = None
-    if span.parent is not None:
-        if span.parent.span_id not in span_id_map:
-            span_id_map[span.parent.span_id] = f"span_{len(span_id_map)}"
-        parent_id = span_id_map[span.parent.span_id]
+    parent = span.parent
+    if parent is not None:
+        parent_span_id = parent.span_id
+        if parent_span_id not in span_id_map:
+            span_id_map[parent_span_id] = f"span_{len(span_id_map)}"
+        parent_id = span_id_map[parent_span_id]
 
     # Filter out unstable attributes
     attributes = {}
@@ -34,7 +41,7 @@ def normalize_span(span: ReadableSpan, span_id_map: dict[int, str]) -> dict:
 
     return {
         "name": span.name,
-        "id": span_id_map[span.context.span_id],
+        "id": span_id_map[span_id],
         "parent_id": parent_id,
         "attributes": attributes,
     }
