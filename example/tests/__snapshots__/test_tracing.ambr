@@ -1,0 +1,86 @@
+# serializer version: 1
+# name: test_nested_spans
+  list([
+    dict({
+      'attributes': dict({
+        'code.filepath': 'example/src/lib.rs',
+        'code.lineno': 46,
+        'code.namespace': 'example_module',
+      }),
+      'id': 'span_0',
+      'name': 'inner_span',
+      'parent_id': 'span_1',
+    }),
+    dict({
+      'attributes': dict({
+        'code.filepath': 'example/src/lib.rs',
+        'code.lineno': 43,
+        'code.namespace': 'example_module',
+      }),
+      'id': 'span_1',
+      'name': 'outer_span',
+      'parent_id': 'span_2',
+    }),
+    dict({
+      'attributes': dict({
+      }),
+      'id': 'span_2',
+      'name': 'python-parent',
+      'parent_id': None,
+    }),
+  ])
+# ---
+# name: test_traced_function
+  list([
+    dict({
+      'attributes': dict({
+        'code.filepath': 'example/src/lib.rs',
+        'code.lineno': 32,
+        'code.namespace': 'example_module',
+      }),
+      'id': 'span_0',
+      'name': 'do_work',
+      'parent_id': 'span_1',
+    }),
+    dict({
+      'attributes': dict({
+      }),
+      'id': 'span_2',
+      'name': 'python-parent',
+      'parent_id': None,
+    }),
+    dict({
+      'attributes': dict({
+        'code.filepath': 'example/src/lib.rs',
+        'code.lineno': 21,
+        'code.namespace': 'example_module',
+      }),
+      'id': 'span_1',
+      'name': 'traced_function_inner',
+      'parent_id': 'span_2',
+    }),
+  ])
+# ---
+# name: test_traced_with_attributes
+  list([
+    dict({
+      'attributes': dict({
+        'code.filepath': 'example/src/lib.rs',
+        'code.lineno': 59,
+        'code.namespace': 'example_module',
+        'count': '3',
+        'name': 'test-request',
+      }),
+      'id': 'span_0',
+      'name': 'process_request',
+      'parent_id': 'span_1',
+    }),
+    dict({
+      'attributes': dict({
+      }),
+      'id': 'span_1',
+      'name': 'python-parent',
+      'parent_id': None,
+    }),
+  ])
+# ---

@@ -11,10 +11,11 @@ dependencies = [
     "opentelemetry-sdk>=1.20",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=7.0",
     "maturin>=1.0,<2.0",
+    "syrupy>=4.8.0",
 ]
 
 [tool.maturin]
