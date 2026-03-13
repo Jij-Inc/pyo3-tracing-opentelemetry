@@ -76,18 +76,18 @@ impl TracingBridge {
         let result = initialize_tracing(py, self);
 
         // Warn if already initialized with different config
-        if let Some(stored) = result.config() {
-            if stored.service_name != self.service_name || stored.tracer_name != self.tracer_name {
-                tracing::warn!(
-                    "pyo3-tracing-opentelemetry: tracing already initialized with \
+        if let Some(stored) = result.config()
+            && (stored.service_name != self.service_name || stored.tracer_name != self.tracer_name)
+        {
+            tracing::warn!(
+                "pyo3-tracing-opentelemetry: tracing already initialized with \
                      service_name={:?}, tracer_name={:?}. \
                      Ignoring new config with service_name={:?}, tracer_name={:?}.",
-                    stored.service_name,
-                    stored.tracer_name,
-                    self.service_name,
-                    self.tracer_name
-                );
-            }
+                stored.service_name,
+                stored.tracer_name,
+                self.service_name,
+                self.tracer_name
+            );
         }
 
         result
@@ -177,10 +177,7 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 ///
 /// To use this crate, ensure Python's `TracerProvider` with span processors is
 /// configured **before** calling any traced Rust functions.
-pub(crate) fn initialize_tracing(
-    py: Python,
-    config: &TracingBridge,
-) -> &'static TracingInitResult {
+pub(crate) fn initialize_tracing(py: Python, config: &TracingBridge) -> &'static TracingInitResult {
     TRACING_INIT_RESULT.get_or_init(|| {
         // Get span processors from Python (only during initialization)
         let span_processors = match get_span_processor_from_python(py) {
