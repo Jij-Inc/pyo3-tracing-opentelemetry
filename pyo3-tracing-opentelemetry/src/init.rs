@@ -8,7 +8,7 @@ use opentelemetry_sdk::{
     Resource,
     trace::{SdkTracerProvider, SimpleSpanProcessor},
 };
-use pyo3::{prelude::*, Py};
+use pyo3::{Py, prelude::*};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -80,15 +80,6 @@ impl TracingConfig {
         get_trace_headers_from_python(py)
             .and_then(|headers| extract_context_from_headers(&headers))
             .map(|ctx| ctx.attach())
-    }
-}
-
-impl Default for TracingConfig {
-    fn default() -> Self {
-        Self {
-            service_name: "pyo3-app",
-            tracer_name: "pyo3-app",
-        }
     }
 }
 
@@ -172,19 +163,6 @@ fn init_tracing_internal(config: &TracingConfig, span_processors: Option<Py<PyAn
         }
     });
     Ok(())
-}
-
-/// Ensure that tracing is initialized (lazy initialization).
-///
-/// This function checks if Python's TracerProvider is an SDK TracerProvider
-/// with a span processor, and initializes Rust-side tracing accordingly.
-/// This is called automatically when `attach_parent_context_from_python` is invoked.
-///
-/// Note: Tracing is only initialized when a span processor is available.
-/// This allows users to configure Python tracing after importing the library
-/// but before calling traced functions.
-pub fn ensure_tracing_initialized(py: Python) {
-    ensure_tracing_initialized_with_config(py, &TracingConfig::default())
 }
 
 /// Ensure that tracing is initialized with custom configuration.

@@ -59,39 +59,3 @@ pub fn get_trace_headers_from_python(py: Python) -> Option<HashMap<String, Strin
         Some(headers)
     }
 }
-
-/// Attach parent context from Python's OpenTelemetry if available.
-///
-/// Returns a guard that will detach the context when dropped.
-/// This function also ensures that tracing is initialized before attaching context.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use pyo3::prelude::*;
-/// use pyo3_tracing_opentelemetry::attach_parent_context_from_python;
-///
-/// #[pyfunction]
-/// fn my_traced_function(py: Python) -> PyResult<()> {
-///     let _guard = attach_parent_context_from_python(py);
-///
-///     // Your traced code here
-///     tracing::info_span!("operation").in_scope(|| {
-///         // ...
-///     });
-///
-///     Ok(())
-/// }
-/// ```
-pub fn attach_parent_context_from_python(
-    py: Python,
-) -> Option<opentelemetry::ContextGuard> {
-    use crate::init::ensure_tracing_initialized;
-
-    // Ensure tracing is initialized before trying to attach context
-    ensure_tracing_initialized(py);
-
-    get_trace_headers_from_python(py)
-        .and_then(|headers| extract_context_from_headers(&headers))
-        .map(|ctx| ctx.attach())
-}

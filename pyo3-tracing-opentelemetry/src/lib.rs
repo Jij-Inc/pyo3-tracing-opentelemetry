@@ -17,12 +17,14 @@
 //!
 //! ```rust,ignore
 //! use pyo3::prelude::*;
-//! use pyo3_tracing_opentelemetry::attach_parent_context_from_python;
+//! use pyo3_tracing_opentelemetry::TracingConfig;
+//!
+//! const TRACER: TracingConfig = TracingConfig::new("my-service", "my-service");
 //!
 //! #[pyfunction]
 //! fn my_traced_function(py: Python) -> PyResult<()> {
 //!     // This ensures tracing is initialized and attaches Python's trace context
-//!     let _guard = attach_parent_context_from_python(py);
+//!     let _guard = TRACER.attach_parent_context(py);
 //!
 //!     // Your traced code here - spans will be forwarded to Python's exporters
 //!     tracing::info_span!("my_operation").in_scope(|| {
@@ -41,22 +43,7 @@ mod init;
 pub use opentelemetry::ContextGuard;
 
 // Public API from context module
-pub use context::{
-    attach_parent_context_from_python, extract_context_from_headers,
-    get_trace_headers_from_python,
-};
+pub use context::{extract_context_from_headers, get_trace_headers_from_python};
 
 // Public API from init module
-pub use init::{TracingConfig, ensure_tracing_initialized, ensure_tracing_initialized_with_config};
-
-// Backwards compatibility: re-export _with_config variants as deprecated
-#[deprecated(
-    since = "0.2.0",
-    note = "use TracingConfig::attach_parent_context() instead"
-)]
-pub fn attach_parent_context_from_python_with_config(
-    py: pyo3::Python,
-    config: &TracingConfig,
-) -> Option<ContextGuard> {
-    config.attach_parent_context(py)
-}
+pub use init::{TracingConfig, ensure_tracing_initialized_with_config};
