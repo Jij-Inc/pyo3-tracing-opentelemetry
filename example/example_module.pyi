@@ -2,6 +2,7 @@
 # ruff: noqa: E501, F401, F403, F405
 
 import builtins
+
 __all__ = [
     "nested_spans",
     "traced_function",
@@ -22,4 +23,3 @@ def traced_with_attributes(name: builtins.str, count: builtins.int) -> None:
     r"""
     A traced function that emits events with attributes.
     """
-
