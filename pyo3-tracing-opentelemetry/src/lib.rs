@@ -17,9 +17,9 @@
 //!
 //! ```rust,ignore
 //! use pyo3::prelude::*;
-//! use pyo3_tracing_opentelemetry::TracingConfig;
+//! use pyo3_tracing_opentelemetry::TracingBridge;
 //!
-//! const TRACER: TracingConfig = TracingConfig::new("my-service", "my-service");
+//! const TRACING: TracingBridge = TracingBridge::new("my-service");
 //!
 //! #[pyfunction]
 //! fn my_traced_function(py: Python) -> PyResult<()> {
@@ -46,4 +46,4 @@ pub use opentelemetry::ContextGuard;
 pub use context::{extract_context_from_headers, get_trace_headers_from_python};
 
 // Public API from init module
-pub use init::{TracingConfig, ensure_tracing_initialized_with_config};
+pub use init::{TracingBridge, ensure_tracing_initialized_with_config};

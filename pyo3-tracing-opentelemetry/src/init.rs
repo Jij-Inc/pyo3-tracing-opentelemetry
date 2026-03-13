@@ -16,21 +16,24 @@ use crate::export::PySpanExporter;
 
 static TRACING_INITIALIZED: OnceLock<()> = OnceLock::new();
 
-/// Configuration for initializing tracing.
+/// Bridge between Python OpenTelemetry and Rust tracing.
+///
+/// This struct holds the configuration needed to initialize the tracing infrastructure
+/// and provides methods for context propagation between Python and Rust.
 #[derive(Debug, Clone)]
-pub struct TracingConfig {
+pub struct TracingBridge {
     /// Service name to use in the resource (for OpenTelemetry backends).
     pub service_name: &'static str,
-    /// Tracer name (must be a static string for OpenTelemetry requirements).
+    /// Tracer name (instrumentation scope name).
     pub tracer_name: &'static str,
 }
 
-impl TracingConfig {
-    /// Create a new TracingConfig with the given service name and tracer name.
-    pub const fn new(service_name: &'static str, tracer_name: &'static str) -> Self {
+impl TracingBridge {
+    /// Create a new TracingBridge with the given name for both service and tracer.
+    pub const fn new(name: &'static str) -> Self {
         Self {
-            service_name,
-            tracer_name,
+            service_name: name,
+            tracer_name: name,
         }
     }
 
@@ -55,9 +58,9 @@ impl TracingConfig {
     ///
     /// ```rust,ignore
     /// use pyo3::prelude::*;
-    /// use pyo3_tracing_opentelemetry::TracingConfig;
+    /// use pyo3_tracing_opentelemetry::TracingBridge;
     ///
-    /// const TRACER: TracingConfig = TracingConfig::new("my-service", "my-service");
+    /// const TRACER: TracingBridge = TracingBridge::new("my-service", "my-service");
     ///
     /// #[pyfunction]
     /// fn my_traced_function(py: Python) -> PyResult<()> {
@@ -116,7 +119,7 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 }
 
 /// Internal function to initialize tracing.
-fn init_tracing_internal(config: &TracingConfig, span_processors: Option<Py<PyAny>>) -> Result<()> {
+fn init_tracing_internal(config: &TracingBridge, span_processors: Option<Py<PyAny>>) -> Result<()> {
     TRACING_INITIALIZED.get_or_init(|| {
         // Create Resource for the TracerProvider
         let resource = Resource::builder()
@@ -173,7 +176,7 @@ fn init_tracing_internal(config: &TracingConfig, span_processors: Option<Py<PyAn
 /// Note: Tracing is only initialized when a span processor is available.
 /// This allows users to configure Python tracing after importing the library
 /// but before calling traced functions.
-pub fn ensure_tracing_initialized_with_config(py: Python, config: &TracingConfig) {
+pub fn ensure_tracing_initialized_with_config(py: Python, config: &TracingBridge) {
     // Only initialize once
     if TRACING_INITIALIZED.get().is_some() {
         return;
