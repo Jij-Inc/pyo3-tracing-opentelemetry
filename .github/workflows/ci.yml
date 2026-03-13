@@ -45,7 +45,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test
 
-  python:
+  example:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -55,12 +55,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v5
-      - name: Generate stubs and verify they are up-to-date
-        run: |
-          cargo run -p pyo3-tracing-opentelemetry-example --features stub_gen --bin stub_gen
-          mv example-module.pyi example_module.pyi
-          git diff --exit-code example_module.pyi
-        working-directory: .
       - run: uv sync
       - run: uv run pyright
+        if: always()
       - run: uv run pytest -v
+        if: always()
+
+  example-stub-gen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          cargo run -p pyo3-tracing-opentelemetry-example --features stub_gen --bin stub_gen
+          git diff --exit-code example_module.pyi
