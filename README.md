@@ -25,12 +25,15 @@ pyo3-tracing-opentelemetry = "0.1"
 
 ```rust
 use pyo3::prelude::*;
-use pyo3_tracing_opentelemetry::{attach_parent_context_from_python, TracingConfig};
+use pyo3_tracing_opentelemetry::TracingBridge;
+
+// Create a tracing bridge as a module-level constant
+const TRACING: TracingBridge = TracingBridge::new("my-service");
 
 #[pyfunction]
 fn my_traced_function(py: Python) -> PyResult<()> {
     // This ensures tracing is initialized and attaches Python's trace context
-    let _guard = attach_parent_context_from_python(py);
+    let _guard = TRACING.attach_parent_context(py);
 
     // Your traced code here - spans will be forwarded to Python's exporters
     tracing::info_span!("my_operation").in_scope(|| {
@@ -41,16 +44,15 @@ fn my_traced_function(py: Python) -> PyResult<()> {
 }
 ```
 
-With custom configuration:
+For advanced configuration (different service name and tracer name):
 
 ```rust
-use pyo3_tracing_opentelemetry::{attach_parent_context_from_python_with_config, TracingConfig};
+use pyo3_tracing_opentelemetry::TracingBridge;
 
-let config = TracingConfig {
-    service_name: "my-service".to_string(),
-    tracer_name: "my-service",
+const TRACING: TracingBridge = TracingBridge {
+    service_name: "my-service",
+    tracer_name: "my-tracer",
 };
-let _guard = attach_parent_context_from_python_with_config(py, &config);
 ```
 
 ### Python side
@@ -74,9 +76,9 @@ with tracer.start_as_current_span("python-parent"):
 
 ## How it works
 
-1. When `attach_parent_context_from_python` is called, the crate:
+1. When `TracingBridge::attach_parent_context(py)` is called, the crate:
    - Checks if Python has an SDK `TracerProvider` with span processors configured
-   - Initializes a Rust `tracing-subscriber` with an OpenTelemetry layer
+   - Initializes a Rust `tracing-subscriber` with an OpenTelemetry layer (only once per process)
    - Extracts the current trace context from Python using W3C Trace Context propagation
    - Attaches that context so Rust spans become children of the Python span
 
@@ -85,23 +87,28 @@ with tracer.start_as_current_span("python-parent"):
    - Calls `on_end()` on each of Python's configured span processors
    - This allows spans to flow through to any Python exporter (Jaeger, OTLP, Console, etc.)
 
+**Note**: Tracing is initialized once per process. If multiple `TracingBridge` instances with different configurations call `attach_parent_context`, the first one wins and subsequent configurations are ignored (with a warning logged).
+
 ## API
 
-### `TracingConfig`
+### `TracingBridge`
 
-Configuration for tracing initialization:
+Bridge between Python OpenTelemetry and Rust tracing:
 
-- `service_name: String` - Service name for the OpenTelemetry resource
-- `tracer_name: &'static str` - Name for the tracer (must be static)
+- `TracingBridge::new(name: &'static str)` - Create with same name for service and tracer
+- `service_name: &'static str` - Service name for the OpenTelemetry resource
+- `tracer_name: &'static str` - Tracer name (instrumentation scope name)
 
-### Functions
+Methods:
 
-- `attach_parent_context_from_python(py: Python) -> Option<ContextGuard>` - Attach Python's trace context with default config
-- `attach_parent_context_from_python_with_config(py: Python, config: &TracingConfig) -> Option<ContextGuard>` - Attach with custom config
-- `ensure_tracing_initialized(py: Python)` - Initialize tracing without attaching context
-- `ensure_tracing_initialized_with_config(py: Python, config: &TracingConfig)` - Initialize with custom config
+- `attach_parent_context(&self, py: Python) -> Option<ContextGuard>` - Initialize tracing and attach Python's trace context
+- `ensure_initialized(&self, py: Python)` - Initialize tracing without attaching context
+
+### Helper Functions
+
 - `extract_context_from_headers(headers: &HashMap<String, String>) -> Option<Context>` - Extract context from W3C headers
 - `get_trace_headers_from_python(py: Python) -> Option<HashMap<String, String>>` - Get W3C headers from Python context
+- `ensure_tracing_initialized_with_config(py: Python, config: &TracingBridge)` - Initialize with custom config (called internally)
 
 ## Requirements
 

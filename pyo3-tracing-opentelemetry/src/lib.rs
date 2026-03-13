@@ -24,7 +24,7 @@
 //! #[pyfunction]
 //! fn my_traced_function(py: Python) -> PyResult<()> {
 //!     // This ensures tracing is initialized and attaches Python's trace context
-//!     let _guard = TRACER.attach_parent_context(py);
+//!     let _guard = TRACING.attach_parent_context(py);
 //!
 //!     // Your traced code here - spans will be forwarded to Python's exporters
 //!     tracing::info_span!("my_operation").in_scope(|| {
