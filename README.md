@@ -111,7 +111,7 @@ Bridge between Python OpenTelemetry and Rust tracing:
 Methods:
 
 - `attach_parent_context(&self, py: Python) -> Option<ContextGuard>` - Initialize tracing and attach Python's trace context
-- `ensure_initialized(&self, py: Python)` - Initialize tracing without attaching context
+- `initialize(&self, py: Python) -> Option<&'static TracingBridge>` - Initialize tracing, returns `None` if Python OTel is not configured
 
 ### Helper Functions
 

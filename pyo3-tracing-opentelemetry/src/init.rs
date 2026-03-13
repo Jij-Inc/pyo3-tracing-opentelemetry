@@ -14,8 +14,9 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 use crate::export::PySpanExporter;
 
 /// Stores the configuration used for initialization.
-/// This is used to detect and warn about conflicting configurations.
-static TRACING_CONFIG: OnceLock<TracingBridge> = OnceLock::new();
+/// - `None`: No span processor was available in Python, OTel export is disabled.
+/// - `Some(config)`: Initialized with the given configuration.
+static TRACING_CONFIG: OnceLock<Option<TracingBridge>> = OnceLock::new();
 
 /// Bridge between Python OpenTelemetry and Rust tracing.
 ///
@@ -38,22 +39,40 @@ impl TracingBridge {
         }
     }
 
-    /// Ensure that tracing is initialized with this configuration.
+    /// Initialize tracing with this configuration.
     ///
-    /// This function checks if Python's TracerProvider is an SDK TracerProvider
-    /// with a span processor, and initializes Rust-side tracing accordingly.
+    /// Returns `Some(&config)` if OTel export was set up successfully,
+    /// `None` if Python doesn't have a span processor configured.
     ///
-    /// Note: Tracing is only initialized when a span processor is available.
-    /// This allows users to configure Python tracing after importing the library
-    /// but before calling traced functions.
-    pub fn ensure_initialized(&self, py: Python) {
-        ensure_tracing_initialized(py, self)
+    /// If tracing was already initialized with a different configuration,
+    /// a warning is logged and the original configuration is returned.
+    ///
+    /// Note: Initialization happens only once per process.
+    pub fn initialize(&self, py: Python) -> Option<&'static TracingBridge> {
+        let result = initialize_tracing(py, self);
+
+        // Warn if already initialized with different config
+        if let Some(stored) = result {
+            if stored.service_name != self.service_name || stored.tracer_name != self.tracer_name {
+                tracing::warn!(
+                    "pyo3-tracing-opentelemetry: tracing already initialized with \
+                     service_name={:?}, tracer_name={:?}. \
+                     Ignoring new config with service_name={:?}, tracer_name={:?}.",
+                    stored.service_name,
+                    stored.tracer_name,
+                    self.service_name,
+                    self.tracer_name
+                );
+            }
+        }
+
+        result
     }
 
     /// Attach parent context from Python's OpenTelemetry if available.
     ///
     /// Returns a guard that will detach the context when dropped.
-    /// This function also ensures that tracing is initialized before attaching context.
+    /// This function also initializes tracing if not already done.
     ///
     /// # Example
     ///
@@ -78,8 +97,8 @@ impl TracingBridge {
     pub fn attach_parent_context(&self, py: Python) -> Option<opentelemetry::ContextGuard> {
         use crate::context::{extract_context_from_headers, get_trace_headers_from_python};
 
-        // Ensure tracing is initialized before trying to attach context
-        self.ensure_initialized(py);
+        // Initialize tracing (no-op if already done)
+        self.initialize(py);
 
         get_trace_headers_from_python(py)
             .and_then(|headers| extract_context_from_headers(&headers))
@@ -119,107 +138,61 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
     Some(span_processors.unbind())
 }
 
-/// Internal function to initialize tracing.
+/// Initialize tracing with Python's OpenTelemetry configuration.
 ///
-/// Uses `get_or_init` to ensure initialization happens exactly once.
-/// If another thread initialized first with a different config, warns about the mismatch.
-fn init_tracing_internal(config: &TracingBridge, span_processors: Option<Py<PyAny>>) {
-    let stored = TRACING_CONFIG.get_or_init(|| {
-        // Create Resource for the TracerProvider
-        let resource = Resource::builder()
-            .with_service_name(config.service_name.to_string())
-            .build();
+/// Returns `Some(&config)` if OTel export was set up successfully,
+/// `None` if Python doesn't have a span processor configured (OTel export disabled).
+///
+/// This is a normal case - when Python-side OTel is not configured,
+/// tracing export is simply disabled without any error.
+///
+/// Note: Initialization happens only once per process. Subsequent calls
+/// return the cached result without re-checking Python's configuration.
+pub(crate) fn initialize_tracing(py: Python, config: &TracingBridge) -> Option<&'static TracingBridge> {
+    TRACING_CONFIG
+        .get_or_init(|| {
+            // Get span processors from Python (only during initialization)
+            let span_processors = get_span_processor_from_python(py)?;
 
-        // Create TracerProvider with optional exporter
-        let provider_builder = SdkTracerProvider::builder().with_resource(resource.clone());
+            // Create Resource for the TracerProvider
+            let resource = Resource::builder()
+                .with_service_name(config.service_name.to_string())
+                .build();
 
-        let provider = if let Some(processors) = span_processors {
             // Use PySpanExporter to forward spans to Python's span processors
             let exporter = PySpanExporter {
-                span_processors: processors,
-                resource,
+                span_processors,
+                resource: resource.clone(),
             };
-            provider_builder
+
+            let provider = SdkTracerProvider::builder()
+                .with_resource(resource)
                 .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
-                .build()
-        } else {
-            // No exporter - spans are created but not exported
-            provider_builder.build()
-        };
+                .build();
 
-        // Set as global provider
-        global::set_tracer_provider(provider.clone());
+            // Set as global provider
+            global::set_tracer_provider(provider.clone());
 
-        // Create OpenTelemetry layer for tracing
-        let otel_layer = OpenTelemetryLayer::new(provider.tracer(config.tracer_name));
+            // Create OpenTelemetry layer for tracing
+            let otel_layer = OpenTelemetryLayer::new(provider.tracer(config.tracer_name));
 
-        // Initialize tracing subscriber with OpenTelemetry layer.
-        // Use try_init() to avoid panic if already initialized (e.g., by another library).
-        // If initialization fails, log a warning so embedding applications know they need
-        // to integrate the OpenTelemetry layer into their own subscriber setup.
-        if let Err(e) = tracing_subscriber::registry()
-            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-            .with(otel_layer)
-            .try_init()
-        {
-            eprintln!(
-                "pyo3-tracing-opentelemetry: failed to initialize tracing subscriber: {e}. \
-                 If you embed this into an application with its own tracing, \
-                 please add the OpenTelemetry layer to your existing subscriber."
-            );
-        }
+            // Initialize tracing subscriber with OpenTelemetry layer.
+            // Use try_init() to avoid panic if already initialized (e.g., by another library).
+            // If initialization fails, log a warning so embedding applications know they need
+            // to integrate the OpenTelemetry layer into their own subscriber setup.
+            if let Err(e) = tracing_subscriber::registry()
+                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+                .with(otel_layer)
+                .try_init()
+            {
+                eprintln!(
+                    "pyo3-tracing-opentelemetry: failed to initialize tracing subscriber: {e}. \
+                     If you embed this into an application with its own tracing, \
+                     please add the OpenTelemetry layer to your existing subscriber."
+                );
+            }
 
-        config.clone()
-    });
-
-    // Check if another thread initialized with a different config
-    if stored.service_name != config.service_name || stored.tracer_name != config.tracer_name {
-        tracing::warn!(
-            "pyo3-tracing-opentelemetry: tracing already initialized with \
-             service_name={:?}, tracer_name={:?}. \
-             Ignoring new config with service_name={:?}, tracer_name={:?}.",
-            stored.service_name,
-            stored.tracer_name,
-            config.service_name,
-            config.tracer_name
-        );
-    }
-}
-
-/// Ensure that tracing is initialized with custom configuration.
-///
-/// This function checks if Python's TracerProvider is an SDK TracerProvider
-/// with a span processor, and initializes Rust-side tracing accordingly.
-///
-/// Note: Tracing can only be initialized once per process. If this function
-/// is called multiple times with different configurations, a warning will be
-/// logged and the subsequent configurations will be ignored.
-///
-/// Note: Tracing is only initialized when a span processor is available.
-/// This allows users to configure Python tracing after importing the library
-/// but before calling traced functions.
-pub(crate) fn ensure_tracing_initialized(py: Python, config: &TracingBridge) {
-    // Fast path: skip Python calls if already initialized
-    if let Some(stored) = TRACING_CONFIG.get() {
-        if stored.service_name != config.service_name || stored.tracer_name != config.tracer_name {
-            tracing::warn!(
-                "pyo3-tracing-opentelemetry: tracing already initialized with \
-                 service_name={:?}, tracer_name={:?}. \
-                 Ignoring new config with service_name={:?}, tracer_name={:?}.",
-                stored.service_name,
-                stored.tracer_name,
-                config.service_name,
-                config.tracer_name
-            );
-        }
-        return;
-    }
-
-    // Try to get the span processor from Python's TracerProvider.
-    // Only initialize tracing when a processor is actually available,
-    // so that tracing can be enabled later once Python tracing is configured.
-    let processor = get_span_processor_from_python(py);
-    if processor.is_some() {
-        init_tracing_internal(config, processor);
-    }
+            Some(config.clone())
+        })
+        .as_ref()
 }
