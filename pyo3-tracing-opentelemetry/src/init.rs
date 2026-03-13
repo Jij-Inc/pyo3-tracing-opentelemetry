@@ -13,10 +13,34 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 use crate::export::PySpanExporter;
 
-/// Stores the configuration used for initialization.
-/// - `None`: No span processor was available in Python, OTel export is disabled.
-/// - `Some(config)`: Initialized with the given configuration.
-static TRACING_CONFIG: OnceLock<Option<TracingBridge>> = OnceLock::new();
+/// Result of tracing initialization.
+#[derive(Debug, Clone)]
+pub enum TracingInitResult {
+    /// OTel export is active with the given configuration.
+    Active(TracingBridge),
+    /// Python doesn't have a `TracerProvider` with span processors configured.
+    PythonOtelNotConfigured,
+    /// Tracing subscriber failed to initialize (already initialized by another library).
+    SubscriberAlreadyInitialized,
+}
+
+impl TracingInitResult {
+    /// Returns `true` if OTel export is active.
+    pub fn is_active(&self) -> bool {
+        matches!(self, TracingInitResult::Active(_))
+    }
+
+    /// Returns the active configuration if OTel export is active.
+    pub fn config(&self) -> Option<&TracingBridge> {
+        match self {
+            TracingInitResult::Active(config) => Some(config),
+            _ => None,
+        }
+    }
+}
+
+/// Stores the initialization result.
+static TRACING_INIT_RESULT: OnceLock<TracingInitResult> = OnceLock::new();
 
 /// Bridge between Python OpenTelemetry and Rust tracing.
 ///
@@ -41,29 +65,29 @@ impl TracingBridge {
 
     /// Initialize tracing with this configuration.
     ///
-    /// Returns `Some(&config)` if OTel export is active, `None` otherwise.
-    /// See [`initialize_tracing`] for details on when `None` is returned.
+    /// Returns the initialization result indicating whether OTel export is active
+    /// and why it might not be.
     ///
     /// If tracing was already initialized with a different configuration,
-    /// a warning is logged and the original configuration is returned.
+    /// a warning is logged and the original result is returned.
     ///
     /// Note: Initialization happens only once per process.
-    pub fn initialize(&self, py: Python) -> Option<&'static TracingBridge> {
+    pub fn initialize(&self, py: Python) -> &'static TracingInitResult {
         let result = initialize_tracing(py, self);
 
         // Warn if already initialized with different config
-        if let Some(stored) = result
-            && (stored.service_name != self.service_name || stored.tracer_name != self.tracer_name)
-        {
-            tracing::warn!(
-                "pyo3-tracing-opentelemetry: tracing already initialized with \
+        if let Some(stored) = result.config() {
+            if stored.service_name != self.service_name || stored.tracer_name != self.tracer_name {
+                tracing::warn!(
+                    "pyo3-tracing-opentelemetry: tracing already initialized with \
                      service_name={:?}, tracer_name={:?}. \
                      Ignoring new config with service_name={:?}, tracer_name={:?}.",
-                stored.service_name,
-                stored.tracer_name,
-                self.service_name,
-                self.tracer_name
-            );
+                    stored.service_name,
+                    stored.tracer_name,
+                    self.service_name,
+                    self.tracer_name
+                );
+            }
         }
 
         result
@@ -140,65 +164,65 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 
 /// Initialize tracing with Python's OpenTelemetry configuration.
 ///
-/// Returns `Some(&config)` if OTel export is active, `None` otherwise.
-///
-/// `None` is returned in these cases:
-/// - Python doesn't have a `TracerProvider` with span processors configured
-/// - The tracing subscriber failed to initialize (e.g., already initialized by another library)
+/// Returns `&'static TracingInitResult` indicating the outcome:
+/// - `Active(config)`: OTel export is active with the given configuration
+/// - `PythonOtelNotConfigured`: Python doesn't have a `TracerProvider` with span processors
+/// - `SubscriberAlreadyInitialized`: Tracing subscriber was already initialized by another library
 ///
 /// # Important
 ///
-/// Initialization happens only once per process, and the result (including `None`)
-/// is cached. If Python's OTel is not configured on the first call, subsequent calls
-/// will return `None` even if Python's OTel is configured later.
+/// Initialization happens only once per process, and the result is cached.
+/// If Python's OTel is not configured on the first call, subsequent calls
+/// will return `PythonOtelNotConfigured` even if Python's OTel is configured later.
 ///
 /// To use this crate, ensure Python's `TracerProvider` with span processors is
 /// configured **before** calling any traced Rust functions.
 pub(crate) fn initialize_tracing(
     py: Python,
     config: &TracingBridge,
-) -> Option<&'static TracingBridge> {
-    TRACING_CONFIG
-        .get_or_init(|| {
-            // Get span processors from Python (only during initialization)
-            let span_processors = get_span_processor_from_python(py)?;
+) -> &'static TracingInitResult {
+    TRACING_INIT_RESULT.get_or_init(|| {
+        // Get span processors from Python (only during initialization)
+        let span_processors = match get_span_processor_from_python(py) {
+            Some(sp) => sp,
+            None => return TracingInitResult::PythonOtelNotConfigured,
+        };
 
-            // Create Resource for the TracerProvider
-            let resource = Resource::builder()
-                .with_service_name(config.service_name.to_string())
-                .build();
+        // Create Resource for the TracerProvider
+        let resource = Resource::builder()
+            .with_service_name(config.service_name.to_string())
+            .build();
 
-            // Use PySpanExporter to forward spans to Python's span processors
-            let exporter = PySpanExporter {
-                span_processors,
-                resource: resource.clone(),
-            };
+        // Use PySpanExporter to forward spans to Python's span processors
+        let exporter = PySpanExporter {
+            span_processors,
+            resource: resource.clone(),
+        };
 
-            let provider = SdkTracerProvider::builder()
-                .with_resource(resource)
-                .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
-                .build();
+        let provider = SdkTracerProvider::builder()
+            .with_resource(resource)
+            .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
+            .build();
 
-            // Set as global provider
-            global::set_tracer_provider(provider.clone());
+        // Set as global provider
+        global::set_tracer_provider(provider.clone());
 
-            // Create OpenTelemetry layer for tracing
-            let otel_layer = OpenTelemetryLayer::new(provider.tracer(config.tracer_name));
+        // Create OpenTelemetry layer for tracing
+        let otel_layer = OpenTelemetryLayer::new(provider.tracer(config.tracer_name));
 
-            // Initialize tracing subscriber with OpenTelemetry layer.
-            // Use try_init() to avoid panic if already initialized (e.g., by another library).
-            if tracing_subscriber::registry()
-                .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-                .with(otel_layer)
-                .try_init()
-                .is_err()
-            {
-                // Subscriber already initialized by another library.
-                // OTel export won't work unless the embedding app adds the layer manually.
-                return None;
-            }
+        // Initialize tracing subscriber with OpenTelemetry layer.
+        // Use try_init() to avoid panic if already initialized (e.g., by another library).
+        if tracing_subscriber::registry()
+            .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+            .with(otel_layer)
+            .try_init()
+            .is_err()
+        {
+            // Subscriber already initialized by another library.
+            // OTel export won't work unless the embedding app adds the layer manually.
+            return TracingInitResult::SubscriberAlreadyInitialized;
+        }
 
-            Some(config.clone())
-        })
-        .as_ref()
+        TracingInitResult::Active(config.clone())
+    })
 }

@@ -46,4 +46,4 @@ pub use opentelemetry::ContextGuard;
 pub use context::{extract_context_from_headers, get_trace_headers_from_python};
 
 // Public API from init module
-pub use init::TracingBridge;
+pub use init::{TracingBridge, TracingInitResult};
