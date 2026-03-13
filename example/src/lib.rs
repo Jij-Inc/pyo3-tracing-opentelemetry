@@ -1,20 +1,15 @@
 //! Example PyO3 module demonstrating pyo3-tracing-opentelemetry usage.
 
 use pyo3::prelude::*;
-use pyo3_tracing_opentelemetry::{TracingConfig, attach_parent_context_from_python_with_config};
+use pyo3_tracing_opentelemetry::TracingBridge;
 
-fn tracing_config() -> TracingConfig {
-    TracingConfig {
-        service_name: "example-module".to_string(),
-        tracer_name: "example-module",
-    }
-}
+const TRACING: TracingBridge = TracingBridge::new("example-module");
 
 /// A simple traced function that does some work.
 #[pyfunction]
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 fn traced_function(py: Python<'_>) -> PyResult<i32> {
-    let _guard = attach_parent_context_from_python_with_config(py, &tracing_config());
+    let _guard = TRACING.attach_parent_context(py);
 
     Ok(traced_function_inner())
 }
@@ -40,7 +35,7 @@ fn do_work() -> i32 {
 #[pyfunction]
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 fn nested_spans(py: Python<'_>) -> PyResult<()> {
-    let _guard = attach_parent_context_from_python_with_config(py, &tracing_config());
+    let _guard = TRACING.attach_parent_context(py);
 
     tracing::info_span!("outer_span").in_scope(|| {
         tracing::info!("In outer span");
@@ -57,7 +52,7 @@ fn nested_spans(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 fn traced_with_attributes(py: Python<'_>, name: String, count: i32) -> PyResult<()> {
-    let _guard = attach_parent_context_from_python_with_config(py, &tracing_config());
+    let _guard = TRACING.attach_parent_context(py);
 
     tracing::info_span!("process_request", %name, %count).in_scope(|| {
         tracing::info!(name = %name, count = count, "Processing request");
