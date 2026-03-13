@@ -1,0 +1,21 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "example-module"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "maturin>=1.0,<2.0",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

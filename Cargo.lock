@@ -362,6 +362,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyo3-tracing-opentelemetry-example"
+version = "0.1.0"
+dependencies = [
+ "pyo3",
+ "pyo3-tracing-opentelemetry",
+ "tracing",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
