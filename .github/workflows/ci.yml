@@ -56,6 +56,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
+      - run: uvx ruff format --check
+      - run: uvx ruff check
       - run: uv run pyright
         if: always()
       - run: uv run pytest -v

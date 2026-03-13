@@ -1,0 +1,43 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  default:
+    desc: Run all checks
+    cmds:
+      - task: sync
+      - task: lint
+      - task: type_check
+      - task: test
+
+  sync:
+    desc: Rebuild Python package and sync dependencies
+    cmds:
+      - uv sync
+
+  stub_gen:
+    desc: Generate stub files (*.pyi) from Rust code
+    cmds:
+      - cargo run --bin stub_gen --features=stub_gen
+
+  format:
+    desc: Format Python code
+    cmds:
+      - uvx ruff format
+
+  lint:
+    desc: Lint Python code
+    cmds:
+      - uvx ruff check
+
+  type_check:
+    desc: Type check
+    cmds:
+      - task: stub_gen
+      - uv run pyright
+
+  test:
+    desc: Run pytest
+    cmds:
+      - uv run pytest -v

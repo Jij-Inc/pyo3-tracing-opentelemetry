@@ -1,0 +1,22 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+includes:
+  example:
+    taskfile: example/Taskfile.yml
+    dir: example
+
+tasks:
+  default:
+    desc: Run all checks
+    cmds:
+      - task: check
+      - task: example:default
+
+  check:
+    desc: Run Rust checks
+    cmds:
+      - cargo fmt --all --check
+      - cargo clippy -- -D warnings
+      - cargo test
