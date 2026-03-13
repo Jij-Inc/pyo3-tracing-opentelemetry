@@ -41,8 +41,8 @@ impl TracingBridge {
 
     /// Initialize tracing with this configuration.
     ///
-    /// Returns `Some(&config)` if OTel export was set up successfully,
-    /// `None` if Python doesn't have a span processor configured.
+    /// Returns `Some(&config)` if OTel export is active, `None` otherwise.
+    /// See [`initialize_tracing`] for details on when `None` is returned.
     ///
     /// If tracing was already initialized with a different configuration,
     /// a warning is logged and the original configuration is returned.
@@ -140,11 +140,11 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 
 /// Initialize tracing with Python's OpenTelemetry configuration.
 ///
-/// Returns `Some(&config)` if OTel export was set up successfully,
-/// `None` if Python doesn't have a span processor configured (OTel export disabled).
+/// Returns `Some(&config)` if OTel export is active, `None` otherwise.
 ///
-/// This is a normal case - when Python-side OTel is not configured,
-/// tracing export is simply disabled without any error.
+/// `None` is returned in these cases:
+/// - Python doesn't have a `TracerProvider` with span processors configured
+/// - The tracing subscriber failed to initialize (e.g., already initialized by another library)
 ///
 /// # Important
 ///
@@ -187,18 +187,15 @@ pub(crate) fn initialize_tracing(
 
             // Initialize tracing subscriber with OpenTelemetry layer.
             // Use try_init() to avoid panic if already initialized (e.g., by another library).
-            // If initialization fails, log a warning so embedding applications know they need
-            // to integrate the OpenTelemetry layer into their own subscriber setup.
-            if let Err(e) = tracing_subscriber::registry()
+            if tracing_subscriber::registry()
                 .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
                 .with(otel_layer)
                 .try_init()
+                .is_err()
             {
-                eprintln!(
-                    "pyo3-tracing-opentelemetry: failed to initialize tracing subscriber: {e}. \
-                     If you embed this into an application with its own tracing, \
-                     please add the OpenTelemetry layer to your existing subscriber."
-                );
+                // Subscriber already initialized by another library.
+                // OTel export won't work unless the embedding app adds the layer manually.
+                return None;
             }
 
             Some(config.clone())

@@ -99,9 +99,9 @@ with tracer.start_as_current_span("python-parent"):
    - This allows spans to flow through to any Python exporter (Jaeger, OTLP, Console, etc.)
 
 > [!IMPORTANT]
-> Tracing configuration is determined on the first call to `attach_parent_context` and cached for the process lifetime.
+> Tracing configuration is determined on the first call to `attach_parent_context` (or `initialize`) and cached for the process lifetime.
 > Ensure Python's `TracerProvider` with span processors is configured **before** calling any traced Rust functions.
-> If Python OTel is not configured on the first call, tracing export will be disabled for the entire process.
+> If OTel export cannot be set up on the first call, it will be disabled for the entire process.
 
 > [!NOTE]
 > Tracing is initialized once per process. If multiple `TracingBridge` instances with different configurations call `attach_parent_context`, the first one wins and subsequent configurations are ignored (with a warning logged).
