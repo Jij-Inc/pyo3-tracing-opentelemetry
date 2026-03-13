@@ -16,6 +16,7 @@ dev = [
     "pytest>=7.0",
     "maturin>=1.0,<2.0",
     "syrupy>=4.8.0",
+    "pyright>=1.1",
 ]
 
 [tool.maturin]

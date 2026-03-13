@@ -45,7 +45,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test
 
-  pytest:
+  python:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,5 +56,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
-      - run: uv run maturin develop
+      - run: uv run pyright
       - run: uv run pytest -v
