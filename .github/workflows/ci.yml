@@ -55,20 +55,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync
+        with:
+          enable-cache: true
+
       - run: uvx ruff format --check
-      - run: uvx ruff check
-      - run: uv run pyright
         if: always()
-      - run: uv run pytest -v
+      - run: uvx ruff check
         if: always()
 
-  example-stub-gen:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: |
+      - name: Check stub files are up-to-date
+        run: |
           cargo run -p pyo3-tracing-opentelemetry-example --features stub_gen --bin stub_gen
-          git diff --exit-code example/example_module.pyi
+          uvx ruff format
+          git diff --exit-code example_module.pyi
+        if: always()
+
+      - name: Build and sync Python package
+        run: uv sync
+
+      - name: Run pyright
+        run: uv run pyright
+        if: always()
+
+      - name: Run pytest
+        run: uv run pytest -v
+        if: always()
