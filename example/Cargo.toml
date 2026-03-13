@@ -1,0 +1,24 @@
+[package]
+name = "pyo3-tracing-opentelemetry-example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "example_module"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+required-features = ["stub_gen"]
+
+[dependencies]
+pyo3.workspace = true
+pyo3-stub-gen = { workspace = true, optional = true }
+pyo3-tracing-opentelemetry.workspace = true
+tracing.workspace = true
+
+[features]
+default = []
+stub_gen = ["pyo3-stub-gen"]

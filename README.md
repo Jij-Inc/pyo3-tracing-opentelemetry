@@ -109,6 +109,39 @@ Configuration for tracing initialization:
 - PyO3 0.27+
 - Python with `opentelemetry-sdk` installed
 
+## Repository Structure
+
+This is a Cargo workspace with the following members:
+
+```
+pyo3-tracing-opentelemetry/
+├── pyo3-tracing-opentelemetry/   # Main library crate
+│   └── src/lib.rs
+├── example/                       # Example PyO3 module for testing
+│   ├── src/lib.rs
+│   ├── pyproject.toml
+│   └── tests/
+└── Cargo.toml                     # Workspace root
+```
+
+## Development
+
+### Running tests
+
+```bash
+# Rust tests
+cargo test
+
+# Python integration tests
+cd example
+uv sync
+uv run pytest -v
+```
+
+### Example module
+
+The `example/` directory contains a PyO3 module demonstrating the library usage. See `example/src/lib.rs` for usage patterns.
+
 ## License
 
 MIT OR Apache-2.0

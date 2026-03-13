@@ -1,0 +1,19 @@
+[package]
+name = "pyo3-tracing-opentelemetry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bridge Rust tracing and Python OpenTelemetry for seamless distributed tracing across PyO3 FFI boundaries"
+repository.workspace = true
+keywords = ["pyo3", "tracing", "opentelemetry", "python"]
+categories = ["development-tools::profiling", "api-bindings"]
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+pyo3.workspace = true
+tracing.workspace = true
+tracing-opentelemetry.workspace = true
+tracing-subscriber.workspace = true
