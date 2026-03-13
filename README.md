@@ -1,6 +1,6 @@
 # pyo3-tracing-opentelemetry
 
-Forward Rust `tracing` spans to Python's OpenTelemetry exporters via PyO3.
+Bridge Rust `tracing` and Python OpenTelemetry for seamless distributed tracing across PyO3 FFI boundaries.
 
 ## Overview
 
@@ -25,7 +25,7 @@ pyo3-tracing-opentelemetry = "0.1"
 
 ```rust
 use pyo3::prelude::*;
-use pyo3_tracing_otel_exporter::{attach_parent_context_from_python, TracingConfig};
+use pyo3_tracing_opentelemetry::{attach_parent_context_from_python, TracingConfig};
 
 #[pyfunction]
 fn my_traced_function(py: Python) -> PyResult<()> {
@@ -44,7 +44,7 @@ fn my_traced_function(py: Python) -> PyResult<()> {
 With custom configuration:
 
 ```rust
-use pyo3_tracing_otel_exporter::{attach_parent_context_from_python_with_config, TracingConfig};
+use pyo3_tracing_opentelemetry::{attach_parent_context_from_python_with_config, TracingConfig};
 
 let config = TracingConfig {
     service_name: "my-service".to_string(),
