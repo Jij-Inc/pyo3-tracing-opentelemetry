@@ -1,0 +1,19 @@
+[package]
+name = "pyo3-tracing-otel-exporter"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Forward Rust tracing spans to Python's OpenTelemetry exporters via PyO3"
+repository = "https://github.com/Jij-Inc/pyo3-tracing-otel-exporter"
+keywords = ["pyo3", "tracing", "opentelemetry", "python"]
+categories = ["development-tools::profiling", "api-bindings"]
+
+[dependencies]
+anyhow = "1.0"
+futures-util = "0.3"
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
+pyo3 = { version = "0.27", features = ["anyhow"] }
+tracing = "0.1"
+tracing-opentelemetry = "0.29"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
