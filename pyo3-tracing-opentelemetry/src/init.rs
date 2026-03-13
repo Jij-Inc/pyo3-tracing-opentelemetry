@@ -52,18 +52,18 @@ impl TracingBridge {
         let result = initialize_tracing(py, self);
 
         // Warn if already initialized with different config
-        if let Some(stored) = result {
-            if stored.service_name != self.service_name || stored.tracer_name != self.tracer_name {
-                tracing::warn!(
-                    "pyo3-tracing-opentelemetry: tracing already initialized with \
+        if let Some(stored) = result
+            && (stored.service_name != self.service_name || stored.tracer_name != self.tracer_name)
+        {
+            tracing::warn!(
+                "pyo3-tracing-opentelemetry: tracing already initialized with \
                      service_name={:?}, tracer_name={:?}. \
                      Ignoring new config with service_name={:?}, tracer_name={:?}.",
-                    stored.service_name,
-                    stored.tracer_name,
-                    self.service_name,
-                    self.tracer_name
-                );
-            }
+                stored.service_name,
+                stored.tracer_name,
+                self.service_name,
+                self.tracer_name
+            );
         }
 
         result
@@ -148,7 +148,10 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 ///
 /// Note: Initialization happens only once per process. Subsequent calls
 /// return the cached result without re-checking Python's configuration.
-pub(crate) fn initialize_tracing(py: Python, config: &TracingBridge) -> Option<&'static TracingBridge> {
+pub(crate) fn initialize_tracing(
+    py: Python,
+    config: &TracingBridge,
+) -> Option<&'static TracingBridge> {
     TRACING_CONFIG
         .get_or_init(|| {
             // Get span processors from Python (only during initialization)
