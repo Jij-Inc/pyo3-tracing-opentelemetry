@@ -1,9 +1,7 @@
 //! Example PyO3 module demonstrating pyo3-tracing-opentelemetry usage.
 
 use pyo3::prelude::*;
-use pyo3_tracing_opentelemetry::{
-    attach_parent_context_from_python_with_config, TracingConfig,
-};
+use pyo3_tracing_opentelemetry::{TracingConfig, attach_parent_context_from_python_with_config};
 
 fn tracing_config() -> TracingConfig {
     TracingConfig {
