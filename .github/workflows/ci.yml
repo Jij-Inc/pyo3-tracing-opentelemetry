@@ -71,4 +71,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: |
           cargo run -p pyo3-tracing-opentelemetry-example --features stub_gen --bin stub_gen
-          git diff --exit-code example_module.pyi
+          git diff --exit-code example/example_module.pyi

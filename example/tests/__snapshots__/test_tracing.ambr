@@ -4,7 +4,7 @@
     dict({
       'attributes': dict({
         'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 46,
+        'code.lineno': 48,
         'code.namespace': 'example_module',
       }),
       'id': 'span_0',
@@ -14,7 +14,7 @@
     dict({
       'attributes': dict({
         'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 43,
+        'code.lineno': 45,
         'code.namespace': 'example_module',
       }),
       'id': 'span_1',
@@ -35,7 +35,7 @@
     dict({
       'attributes': dict({
         'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 32,
+        'code.lineno': 33,
         'code.namespace': 'example_module',
       }),
       'id': 'span_0',
@@ -52,7 +52,7 @@
     dict({
       'attributes': dict({
         'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 21,
+        'code.lineno': 22,
         'code.namespace': 'example_module',
       }),
       'id': 'span_1',
@@ -66,7 +66,7 @@
     dict({
       'attributes': dict({
         'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 59,
+        'code.lineno': 62,
         'code.namespace': 'example_module',
         'count': '3',
         'name': 'test-request',
