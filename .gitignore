@@ -1,1 +1,14 @@
-/target
+# Rust
+target/
+
+# VSCode
+.vscode/
+
+# Jupyter notebooks
+Untitled*.ipynb
+*.nbconvert.ipynb
+.ipynb_checkpoints/
+
+# Python
+.venv*/
+__pycache__/
