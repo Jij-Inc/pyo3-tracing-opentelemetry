@@ -47,12 +47,21 @@ fn my_traced_function(py: Python) -> PyResult<()> {
 For advanced configuration (different service name and tracer name):
 
 ```rust
+use pyo3::prelude::*;
 use pyo3_tracing_opentelemetry::TracingBridge;
 
+// Use struct literal for different service_name and tracer_name
 const TRACING: TracingBridge = TracingBridge {
     service_name: "my-service",
     tracer_name: "my-tracer",
 };
+
+#[pyfunction]
+fn my_traced_function(py: Python) -> PyResult<()> {
+    let _guard = TRACING.attach_parent_context(py);
+    // ...
+    Ok(())
+}
 ```
 
 ### Python side
@@ -108,7 +117,6 @@ Methods:
 
 - `extract_context_from_headers(headers: &HashMap<String, String>) -> Option<Context>` - Extract context from W3C headers
 - `get_trace_headers_from_python(py: Python) -> Option<HashMap<String, String>>` - Get W3C headers from Python context
-- `ensure_tracing_initialized_with_config(py: Python, config: &TracingBridge)` - Initialize with custom config (called internally)
 
 ## Requirements
 

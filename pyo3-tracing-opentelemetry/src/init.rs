@@ -2,7 +2,6 @@
 
 use std::sync::OnceLock;
 
-use anyhow::Result;
 use opentelemetry::{global, trace::TracerProvider as _};
 use opentelemetry_sdk::{
     Resource,
@@ -48,7 +47,7 @@ impl TracingBridge {
     /// This allows users to configure Python tracing after importing the library
     /// but before calling traced functions.
     pub fn ensure_initialized(&self, py: Python) {
-        ensure_tracing_initialized_with_config(py, self)
+        ensure_tracing_initialized(py, self)
     }
 
     /// Attach parent context from Python's OpenTelemetry if available.
@@ -121,7 +120,13 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 }
 
 /// Internal function to initialize tracing.
-fn init_tracing_internal(config: &TracingBridge, span_processors: Option<Py<PyAny>>) -> Result<()> {
+///
+/// Returns the stored configuration after initialization.
+/// This may differ from `config` if another thread won the initialization race.
+fn init_tracing_internal(
+    config: &TracingBridge,
+    span_processors: Option<Py<PyAny>>,
+) -> &'static TracingBridge {
     TRACING_CONFIG.get_or_init(|| {
         // Create Resource for the TracerProvider
         let resource = Resource::builder()
@@ -168,8 +173,22 @@ fn init_tracing_internal(config: &TracingBridge, span_processors: Option<Py<PyAn
         }
 
         config.clone()
-    });
-    Ok(())
+    })
+}
+
+/// Warn if the provided config differs from the stored config.
+fn warn_on_config_mismatch(config: &TracingBridge, stored: &TracingBridge) {
+    if stored.service_name != config.service_name || stored.tracer_name != config.tracer_name {
+        tracing::warn!(
+            "pyo3-tracing-opentelemetry: tracing already initialized with \
+             service_name={:?}, tracer_name={:?}. \
+             Ignoring new config with service_name={:?}, tracer_name={:?}.",
+            stored.service_name,
+            stored.tracer_name,
+            config.service_name,
+            config.tracer_name
+        );
+    }
 }
 
 /// Ensure that tracing is initialized with custom configuration.
@@ -184,22 +203,10 @@ fn init_tracing_internal(config: &TracingBridge, span_processors: Option<Py<PyAn
 /// Note: Tracing is only initialized when a span processor is available.
 /// This allows users to configure Python tracing after importing the library
 /// but before calling traced functions.
-pub fn ensure_tracing_initialized_with_config(py: Python, config: &TracingBridge) {
-    // Check if already initialized with a different config
-    if let Some(existing) = TRACING_CONFIG.get() {
-        if existing.service_name != config.service_name
-            || existing.tracer_name != config.tracer_name
-        {
-            tracing::warn!(
-                "pyo3-tracing-opentelemetry: tracing already initialized with \
-                 service_name={:?}, tracer_name={:?}. \
-                 Ignoring new config with service_name={:?}, tracer_name={:?}.",
-                existing.service_name,
-                existing.tracer_name,
-                config.service_name,
-                config.tracer_name
-            );
-        }
+pub(crate) fn ensure_tracing_initialized(py: Python, config: &TracingBridge) {
+    // Fast path: if already initialized, just check for config mismatch
+    if let Some(stored) = TRACING_CONFIG.get() {
+        warn_on_config_mismatch(config, stored);
         return;
     }
 
@@ -208,6 +215,10 @@ pub fn ensure_tracing_initialized_with_config(py: Python, config: &TracingBridge
     // so that tracing can be enabled later once Python tracing is configured.
     let processor = get_span_processor_from_python(py);
     if processor.is_some() {
-        let _ = init_tracing_internal(config, processor);
+        // Initialize and check for race condition:
+        // If another thread initialized first with a different config,
+        // get_or_init returns their config and we warn about the mismatch.
+        let stored = init_tracing_internal(config, processor);
+        warn_on_config_mismatch(config, stored);
     }
 }
