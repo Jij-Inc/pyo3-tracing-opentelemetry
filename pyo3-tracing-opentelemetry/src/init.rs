@@ -146,8 +146,14 @@ fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
 /// This is a normal case - when Python-side OTel is not configured,
 /// tracing export is simply disabled without any error.
 ///
-/// Note: Initialization happens only once per process. Subsequent calls
-/// return the cached result without re-checking Python's configuration.
+/// # Important
+///
+/// Initialization happens only once per process, and the result (including `None`)
+/// is cached. If Python's OTel is not configured on the first call, subsequent calls
+/// will return `None` even if Python's OTel is configured later.
+///
+/// To use this crate, ensure Python's `TracerProvider` with span processors is
+/// configured **before** calling any traced Rust functions.
 pub(crate) fn initialize_tracing(
     py: Python,
     config: &TracingBridge,
