@@ -1,4 +1,4 @@
-# pyo3-tracing-otel-exporter
+# pyo3-tracing-opentelemetry
 
 Forward Rust `tracing` spans to Python's OpenTelemetry exporters via PyO3.
 
@@ -16,7 +16,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-pyo3-tracing-otel-exporter = "0.1"
+pyo3-tracing-opentelemetry = "0.1"
 ```
 
 ## Usage

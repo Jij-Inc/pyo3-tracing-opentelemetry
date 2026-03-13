@@ -17,7 +17,7 @@
 //!
 //! ```rust,ignore
 //! use pyo3::prelude::*;
-//! use pyo3_tracing_otel_exporter::attach_parent_context_from_python;
+//! use pyo3_tracing_opentelemetry::attach_parent_context_from_python;
 //!
 //! #[pyfunction]
 //! fn my_traced_function(py: Python) -> PyResult<()> {
@@ -38,16 +38,15 @@ use std::{collections::HashMap, sync::OnceLock, time::SystemTime};
 use anyhow::Result;
 use futures_util::future::BoxFuture;
 use opentelemetry::{
-    global,
+    Context, global,
     propagation::TextMapPropagator,
     trace::{SpanKind, TraceContextExt, TracerProvider as _},
-    Context,
 };
 use opentelemetry_sdk::{
+    Resource,
     error::OTelSdkResult,
     propagation::TraceContextPropagator,
     trace::{SdkTracerProvider, SimpleSpanProcessor, SpanData, SpanExporter as OTelSpanExporter},
-    Resource,
 };
 use pyo3::{
     prelude::*,
@@ -55,7 +54,7 @@ use pyo3::{
     types::{PyDict, PyList},
 };
 use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 // ============================================================================
 // Python Class Cache (to avoid repeated imports)
@@ -601,7 +600,7 @@ pub fn ensure_tracing_initialized_with_config(py: Python, config: &TracingConfig
 ///
 /// ```rust,ignore
 /// use pyo3::prelude::*;
-/// use pyo3_tracing_otel_exporter::attach_parent_context_from_python;
+/// use pyo3_tracing_opentelemetry::attach_parent_context_from_python;
 ///
 /// #[pyfunction]
 /// fn my_traced_function(py: Python) -> PyResult<()> {

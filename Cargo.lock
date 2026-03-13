@@ -348,7 +348,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pyo3-tracing-otel-exporter"
+name = "pyo3-tracing-opentelemetry"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -1,10 +1,10 @@
 [package]
-name = "pyo3-tracing-otel-exporter"
+name = "pyo3-tracing-opentelemetry"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Forward Rust tracing spans to Python's OpenTelemetry exporters via PyO3"
-repository = "https://github.com/Jij-Inc/pyo3-tracing-otel-exporter"
+repository = "https://github.com/Jij-Inc/pyo3-tracing-opentelemetry"
 keywords = ["pyo3", "tracing", "opentelemetry", "python"]
 categories = ["development-tools::profiling", "api-bindings"]
 
