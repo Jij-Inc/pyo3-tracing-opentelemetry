@@ -33,6 +33,9 @@
 //! }
 //! ```
 
+// Re-export ContextGuard since it's part of our public API return types
+pub use opentelemetry::ContextGuard;
+
 use std::{collections::HashMap, sync::OnceLock, time::SystemTime};
 
 use anyhow::Result;
