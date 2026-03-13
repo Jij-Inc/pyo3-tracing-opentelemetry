@@ -38,10 +38,12 @@ _test_provider: TracerProvider | None = None
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_tracing():
-    """Set up a test TracerProvider with a span exporter."""
-    global _test_exporter, _test_provider
+    """Set up a test TracerProvider with a span exporter.
 
-    previous_provider = trace.get_tracer_provider()
+    Note: TracerProvider can only be set once per process.
+    All tests share the same provider and use exporter.clear() for isolation.
+    """
+    global _test_exporter, _test_provider
 
     _test_exporter = TestSpanExporter()
     resource = Resource.create({"service.name": "example-module-test"})
@@ -49,14 +51,10 @@ def setup_test_tracing():
     _test_provider.add_span_processor(SimpleSpanProcessor(_test_exporter))
     trace.set_tracer_provider(_test_provider)
 
-    try:
-        yield
-    finally:
-        if _test_provider is not None:
-            _test_provider.shutdown()
-        trace.set_tracer_provider(previous_provider)
-        _test_exporter = None
-        _test_provider = None
+    yield
+
+    if _test_provider is not None:
+        _test_provider.shutdown()
 
 
 @pytest.fixture
