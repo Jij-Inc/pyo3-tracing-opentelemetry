@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "*"
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -14,9 +14,10 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
-      - run: cargo publish -p pyo3-tracing-opentelemetry
+      - run: cargo publish --locked -p pyo3-tracing-opentelemetry
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
@@ -27,11 +28,11 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: main
 
-      - name: Install cargo-edit
-        run: cargo install cargo-edit
+      - uses: taiki-e/install-action@cargo-edit
 
       - name: Bump version
         run: |
