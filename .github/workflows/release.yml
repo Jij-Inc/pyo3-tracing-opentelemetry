@@ -32,7 +32,9 @@ jobs:
         with:
           ref: main
 
-      - uses: taiki-e/install-action@cargo-edit
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-edit
 
       - name: Bump version
         run: |
