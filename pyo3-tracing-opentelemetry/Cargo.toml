@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 description = "Bridge Rust tracing and Python OpenTelemetry for seamless distributed tracing across PyO3 FFI boundaries"
 repository.workspace = true
+readme = "../README.md"
 keywords = ["pyo3", "tracing", "opentelemetry", "python"]
 categories = ["development-tools::profiling", "api-bindings"]
 
