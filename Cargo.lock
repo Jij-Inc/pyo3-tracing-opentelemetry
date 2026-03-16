@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "pyo3-tracing-opentelemetry"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "pyo3-tracing-opentelemetry-example"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "pyo3",
  "pyo3-stub-gen",
