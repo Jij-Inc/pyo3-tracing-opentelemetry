@@ -16,7 +16,15 @@ use crate::export::PySpanExporter;
 /// Result of tracing initialization.
 #[derive(Debug, Clone)]
 pub enum TracingInitResult {
-    /// OTel export is active with the given configuration.
+    /// The Rust subscriber was installed successfully with the given
+    /// configuration.
+    ///
+    /// Note: "active" here means the bridge is wired up and will forward
+    /// Rust spans to whatever Python `TracerProvider` is configured when
+    /// spans are exported. It does **not** guarantee that exports are
+    /// currently reaching a collector — if Python has no SDK
+    /// `TracerProvider` (or it has no span processors) at export time,
+    /// those spans are dropped silently.
     Active(TracingBridge),
     /// Python doesn't have a `TracerProvider` with span processors configured.
     ///
@@ -155,6 +163,14 @@ impl TracingBridge {
 /// any point during the process lifetime and subsequent Rust spans will
 /// follow. If no provider is configured when a span is exported, that span is
 /// dropped silently.
+// `_py: Python` is unused in the body but retained so that
+// `TracingBridge::initialize(&self, py: Python)` — which has been the
+// public entry point since 0.1.x — keeps its signature. Initialization
+// no longer needs to call into Python because the destination span
+// processors are resolved dynamically at export time (see `export.rs`),
+// but we want callers that already hold a `Python<'_>` token to be able
+// to pass it through without ceremony, and we leave room to touch
+// Python again from here in the future without a breaking change.
 pub(crate) fn initialize_tracing(
     _py: Python,
     config: &TracingBridge,
