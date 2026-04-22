@@ -16,7 +16,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-pyo3-tracing-opentelemetry = "0.1"
+pyo3-tracing-opentelemetry = "0.2"
 ```
 
 ## Usage
@@ -88,23 +88,24 @@ with tracer.start_as_current_span("python-parent"):
 ## How it works
 
 1. When `TracingBridge::attach_parent_context(py)` is called, the crate:
-   - Checks if Python has an SDK `TracerProvider` with span processors configured
    - Initializes a Rust `tracing-subscriber` with an OpenTelemetry layer (only once per process)
    - Extracts the current trace context from Python using W3C Trace Context propagation
    - Attaches that context so Rust spans become children of the Python span
 
 2. When Rust spans complete, the `PySpanExporter`:
+   - Resolves Python's **current** `TracerProvider` via `trace.get_tracer_provider()` on every span export
    - Converts `SpanData` to Python `ReadableSpan` objects
-   - Calls `on_end()` on each of Python's configured span processors
-   - This allows spans to flow through to any Python exporter (Jaeger, OTLP, Console, etc.)
-
-> [!IMPORTANT]
-> Tracing configuration is determined on the first call to `attach_parent_context` (or `initialize`) and cached for the process lifetime.
-> Ensure Python's `TracerProvider` with span processors is configured **before** calling any traced Rust functions.
-> If OTel export cannot be set up on the first call, it will be disabled for the entire process.
+   - Calls `on_end()` on each of the provider's active span processors
+   - This allows spans to flow through to any Python exporter (Jaeger, OTLP, Console, etc.), and lets the embedding application add, swap, or tear down span processors at any point during the process lifetime
 
 > [!NOTE]
-> Tracing is initialized once per process. If multiple `TracingBridge` instances with different configurations call `attach_parent_context`, the first one wins and subsequent configurations are ignored (with a warning logged).
+> Python's `TracerProvider` does **not** need to be configured before the first call into the bridge. If no SDK `TracerProvider` is active when a span is exported, the span is dropped silently; once a provider is installed, subsequent spans start flowing. This makes the crate work naturally for notebooks and tests that set up tracing lazily.
+
+> [!IMPORTANT]
+> The Rust `tracing-subscriber` is still initialized once per process and cannot be re-initialized. If another library has already called `tracing_subscriber::set_global_default`, the bridge returns `TracingInitResult::SubscriberAlreadyInitialized` and OTel export won't work unless the embedding application wires the OpenTelemetry layer itself.
+
+> [!NOTE]
+> If multiple `TracingBridge` instances with different configurations call `attach_parent_context`, the first one wins and subsequent configurations are ignored (with a warning logged).
 
 ## Requirements
 

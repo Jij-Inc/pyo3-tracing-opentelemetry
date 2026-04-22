@@ -2,12 +2,12 @@
 
 use std::sync::OnceLock;
 
-use opentelemetry::{global, trace::TracerProvider as _};
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::{
     Resource,
     trace::{SdkTracerProvider, SimpleSpanProcessor},
 };
-use pyo3::{Py, prelude::*};
+use pyo3::prelude::*;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -16,10 +16,16 @@ use crate::export::PySpanExporter;
 /// Result of tracing initialization.
 #[derive(Debug, Clone)]
 pub enum TracingInitResult {
-    /// OTel export is active with the given configuration.
+    /// The Rust subscriber was installed successfully with the given
+    /// configuration.
+    ///
+    /// Note: "active" here means the bridge is wired up and will forward
+    /// Rust spans to whatever Python `TracerProvider` is configured when
+    /// spans are exported. It does **not** guarantee that exports are
+    /// currently reaching a collector — if Python has no SDK
+    /// `TracerProvider` (or it has no span processors) at export time,
+    /// those spans are dropped silently.
     Active(TracingBridge),
-    /// Python doesn't have a `TracerProvider` with span processors configured.
-    PythonOtelNotConfigured,
     /// Tracing subscriber failed to initialize (already initialized by another library).
     SubscriberAlreadyInitialized,
 }
@@ -65,15 +71,14 @@ impl TracingBridge {
 
     /// Initialize tracing with this configuration.
     ///
-    /// Returns the initialization result indicating whether OTel export is active
-    /// and why it might not be.
-    ///
-    /// If tracing was already initialized with a different configuration,
-    /// a warning is logged and the original result is returned.
+    /// Returns the initialization result indicating whether the Rust
+    /// subscriber was installed. If the bridge was already initialized with a
+    /// different configuration, a warning is logged and the original result
+    /// is returned.
     ///
     /// Note: Initialization happens only once per process.
-    pub fn initialize(&self, py: Python) -> &'static TracingInitResult {
-        let result = initialize_tracing(py, self);
+    pub fn initialize(&self) -> &'static TracingInitResult {
+        let result = initialize_tracing(self);
 
         // Warn if already initialized with different config
         if let Some(stored) = result.config()
@@ -122,7 +127,7 @@ impl TracingBridge {
         use crate::context::{extract_context_from_headers, get_trace_headers_from_python};
 
         // Initialize tracing (no-op if already done)
-        self.initialize(py);
+        self.initialize();
 
         get_trace_headers_from_python(py)
             .and_then(|headers| extract_context_from_headers(&headers))
@@ -130,69 +135,35 @@ impl TracingBridge {
     }
 }
 
-/// Get the span processors from Python's TracerProvider if available.
-///
-/// Note: This uses internal attributes (`_active_span_processor._span_processors`)
-/// because the OpenTelemetry Python SDK does not expose a public API to access
-/// registered span processors. This is the same approach used by other integrations.
-fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
-    let trace = py.import("opentelemetry.trace").ok()?;
-    let sdk_trace = py.import("opentelemetry.sdk.trace").ok()?;
-    let tracer_provider_class = sdk_trace.getattr("TracerProvider").ok()?;
-
-    let provider = trace.call_method0("get_tracer_provider").ok()?;
-
-    // Check if it's an SDK TracerProvider
-    if !provider.is_instance(&tracer_provider_class).ok()? {
-        return None;
-    }
-
-    // Access _active_span_processor (SynchronousMultiSpanProcessor or ConcurrentMultiSpanProcessor)
-    // then get _span_processors tuple from it
-    let active_processor = provider.getattr("_active_span_processor").ok()?;
-    let span_processors = active_processor.getattr("_span_processors").ok()?;
-
-    // Check if there are any span processors configured
-    let len: usize = span_processors.len().ok()?;
-    if len == 0 {
-        return None;
-    }
-
-    // Return the span_processors tuple - we'll iterate over it in export
-    Some(span_processors.unbind())
-}
-
 /// Initialize tracing with Python's OpenTelemetry configuration.
 ///
 /// Returns `&'static TracingInitResult` indicating the outcome:
-/// - `Active(config)`: OTel export is active with the given configuration
-/// - `PythonOtelNotConfigured`: Python doesn't have a `TracerProvider` with span processors
-/// - `SubscriberAlreadyInitialized`: Tracing subscriber was already initialized by another library
+/// - `Active(config)`: OTel export is active with the given configuration.
+/// - `SubscriberAlreadyInitialized`: Tracing subscriber was already initialized by another library.
 ///
 /// # Important
 ///
 /// Initialization happens only once per process, and the result is cached.
-/// If Python's OTel is not configured on the first call, subsequent calls
-/// will return `PythonOtelNotConfigured` even if Python's OTel is configured later.
 ///
-/// To use this crate, ensure Python's `TracerProvider` with span processors is
-/// configured **before** calling any traced Rust functions.
-pub(crate) fn initialize_tracing(py: Python, config: &TracingBridge) -> &'static TracingInitResult {
+/// Unlike earlier versions, this function **does not** check whether Python's
+/// `TracerProvider` is already configured: it installs the Rust subscriber
+/// unconditionally. The destination Python span processors are resolved
+/// dynamically on every span export (see [`crate::export::PySpanExporter`]),
+/// so Python's `TracerProvider` can be configured, swapped, or torn down at
+/// any point during the process lifetime and subsequent Rust spans will
+/// follow. If no provider is configured when a span is exported, that span is
+/// dropped silently.
+pub(crate) fn initialize_tracing(config: &TracingBridge) -> &'static TracingInitResult {
     TRACING_INIT_RESULT.get_or_init(|| {
-        // Get span processors from Python (only during initialization)
-        let span_processors = match get_span_processor_from_python(py) {
-            Some(sp) => sp,
-            None => return TracingInitResult::PythonOtelNotConfigured,
-        };
-
         // Create Resource for the TracerProvider
         let resource = Resource::builder()
             .with_service_name(config.service_name.to_string())
             .build();
 
-        // Use PySpanExporter to forward spans to Python's span processors
+        // Use PySpanExporter to forward spans to Python's span processors.
+        // It resolves `trace.get_tracer_provider()` dynamically on each call
+        // to `export()`, so the target is not locked in at init time.
         let exporter = PySpanExporter {
-            span_processors,
             resource: resource.clone(),
         };
 
@@ -201,10 +172,18 @@ pub(crate) fn initialize_tracing(py: Python, config: &TracingBridge) -> &'static
             .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
             .build();
 
-        // Set as global provider
-        global::set_tracer_provider(provider.clone());
-
-        // Create OpenTelemetry layer for tracing
+        // Create the OpenTelemetry layer. The tracer clones internal Arcs
+        // from the provider, so the pipeline stays alive as long as the
+        // subscriber (and thus the layer) does.
+        //
+        // We intentionally do **not** call
+        // `opentelemetry::global::set_tracer_provider(...)` here. The bridge
+        // routes Rust `tracing` events to Python through the layer we install
+        // below and does not read from OpenTelemetry's Rust-side global. If
+        // the host application has installed its own global tracer provider
+        // (either directly or via another library), overwriting it from here
+        // would clobber its telemetry setup for uses like
+        // `opentelemetry::global::tracer(...)`.
         let otel_layer = OpenTelemetryLayer::new(provider.tracer(config.tracer_name));
 
         // Initialize tracing subscriber with OpenTelemetry layer.

@@ -1,5 +1,6 @@
 //! Span export functionality - converts Rust SpanData to Python ReadableSpan.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 use futures_util::future::BoxFuture;
@@ -67,9 +68,16 @@ pub(crate) fn get_python_classes(py: Python<'_>) -> PyResult<&PythonClasses> {
 
 /// Python span processor-based exporter that forwards spans to Python's OpenTelemetry
 /// by directly constructing ReadableSpan objects.
+///
+/// The target span processors are resolved **dynamically** from Python's current
+/// `TracerProvider` on every `export()` call, rather than captured once at init
+/// time. This means the embedding application can call
+/// `trace.set_tracer_provider(...)` or swap span processors at any point and
+/// subsequent Rust spans will be routed to the new destination.
+///
+/// If Python has no SDK `TracerProvider` (or it has no span processors) at the
+/// moment spans are exported, those spans are dropped silently.
 pub(crate) struct PySpanExporter {
-    /// Python list of span processors (from TracerProvider.span_processors)
-    pub span_processors: Py<PyAny>,
     /// Resource attributes to include in spans
     pub resource: Resource,
 }
@@ -80,17 +88,92 @@ impl std::fmt::Debug for PySpanExporter {
     }
 }
 
+/// One-shot latch so we only warn once per process about missing
+/// `opentelemetry` Python modules. A broken environment should surface a
+/// diagnostic, but we don't want to spam the log on every span export.
+static IMPORT_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
+
+fn warn_once_on_import_failure(module: &str, err: &pyo3::PyErr) {
+    if !IMPORT_WARNING_EMITTED.swap(true, Ordering::Relaxed) {
+        ::tracing::warn!(
+            "pyo3-tracing-opentelemetry: failed to import `{module}` ({err}). \
+             Rust spans will be dropped until the `opentelemetry` / \
+             `opentelemetry-sdk` Python packages are importable. This warning \
+             is emitted at most once per process."
+        );
+    }
+}
+
+/// Look up Python's current `TracerProvider` and return its active span
+/// processors tuple, if any.
+///
+/// Returns `None` when:
+/// - `opentelemetry.trace` / `opentelemetry.sdk.trace` cannot be imported
+///   (in which case a one-shot warning is also emitted — a missing
+///   `opentelemetry-sdk` is almost always an environment / packaging bug
+///   rather than an intentional state),
+/// - the current provider is not an SDK `TracerProvider` (e.g. the default
+///   `ProxyTracerProvider`),
+/// - the provider has no span processors configured.
+///
+/// The last two cases stay silent so tests and notebooks can set up
+/// tracing lazily without log noise.
+///
+/// Uses the `_active_span_processor._span_processors` private path because
+/// the OpenTelemetry Python SDK does not expose a public API for this.
+fn get_current_span_processors(py: Python<'_>) -> Option<Py<PyAny>> {
+    let trace = match py.import("opentelemetry.trace") {
+        Ok(m) => m,
+        Err(e) => {
+            warn_once_on_import_failure("opentelemetry.trace", &e);
+            return None;
+        }
+    };
+    let sdk_trace = match py.import("opentelemetry.sdk.trace") {
+        Ok(m) => m,
+        Err(e) => {
+            warn_once_on_import_failure("opentelemetry.sdk.trace", &e);
+            return None;
+        }
+    };
+    let tracer_provider_class = sdk_trace.getattr("TracerProvider").ok()?;
+
+    let provider = trace.call_method0("get_tracer_provider").ok()?;
+
+    if !provider.is_instance(&tracer_provider_class).ok()? {
+        return None;
+    }
+
+    let active_processor = provider.getattr("_active_span_processor").ok()?;
+    let span_processors = active_processor.getattr("_span_processors").ok()?;
+
+    let len: usize = span_processors.len().ok()?;
+    if len == 0 {
+        return None;
+    }
+
+    Some(span_processors.unbind())
+}
+
 impl OTelSpanExporter for PySpanExporter {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
         let mut errors: Vec<String> = Vec::new();
 
         Python::attach(|py| {
+            // Resolve the current destination span processors dynamically.
+            // If Python has no provider right now, drop the batch silently:
+            // this lets tests and notebooks install/swap/teardown providers
+            // freely without keeping state alive on the Rust side.
+            let Some(span_processors) = get_current_span_processors(py) else {
+                return;
+            };
+
             for span_data in batch {
                 // Convert SpanData directly to Python ReadableSpan
                 match span_data_to_readable_span(py, &span_data, &self.resource) {
                     Ok(readable_span) => {
                         // Iterate over all span processors and call on_end on each
-                        match self.span_processors.bind(py).try_iter() {
+                        match span_processors.bind(py).try_iter() {
                             Ok(processors) => {
                                 for item in processors {
                                     match item {
