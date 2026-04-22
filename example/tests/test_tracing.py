@@ -124,6 +124,12 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
     extra = TestSpanExporter()
     provider = trace.get_tracer_provider()
     assert isinstance(provider, SdkTracerProvider)
+
+    # Snapshot the provider's span-processor tuple so we can restore it in
+    # `finally`. The SDK has no public remove_span_processor API, so we touch
+    # the same private attribute the bridge itself walks.
+    active_processor = provider._active_span_processor
+    original_processors = active_processor._span_processors
     provider.add_span_processor(SimpleSpanProcessor(extra))
 
     try:
@@ -137,7 +143,7 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
         # The originally-registered processor continues to receive spans too.
         assert len(span_exporter.spans) > 0
     finally:
-        # The SDK has no public remove_span_processor API; shutting the
-        # exporter down prevents the leaked processor from doing work in
-        # subsequent tests.
+        # Restore the provider's processor tuple so the extra processor does
+        # not leak into subsequent tests, and shut the exporter down.
+        active_processor._span_processors = original_processors
         extra.shutdown()
