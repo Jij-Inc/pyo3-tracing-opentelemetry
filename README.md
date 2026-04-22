@@ -16,7 +16,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-pyo3-tracing-opentelemetry = "0.1"
+pyo3-tracing-opentelemetry = "0.2"
 ```
 
 ## Usage

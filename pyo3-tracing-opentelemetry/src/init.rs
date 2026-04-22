@@ -26,15 +26,6 @@ pub enum TracingInitResult {
     /// `TracerProvider` (or it has no span processors) at export time,
     /// those spans are dropped silently.
     Active(TracingBridge),
-    /// Python doesn't have a `TracerProvider` with span processors configured.
-    ///
-    /// As of v0.1.3 this variant is no longer produced: the bridge installs
-    /// its Rust subscriber unconditionally and resolves the destination
-    /// Python `TracerProvider` dynamically on each span export. If Python has
-    /// no provider when a span is exported, the span is dropped silently. The
-    /// variant is kept for backward compatibility so downstream `match` arms
-    /// continue to compile.
-    PythonOtelNotConfigured,
     /// Tracing subscriber failed to initialize (already initialized by another library).
     SubscriberAlreadyInitialized,
 }
@@ -80,15 +71,14 @@ impl TracingBridge {
 
     /// Initialize tracing with this configuration.
     ///
-    /// Returns the initialization result indicating whether OTel export is active
-    /// and why it might not be.
-    ///
-    /// If tracing was already initialized with a different configuration,
-    /// a warning is logged and the original result is returned.
+    /// Returns the initialization result indicating whether the Rust
+    /// subscriber was installed. If the bridge was already initialized with a
+    /// different configuration, a warning is logged and the original result
+    /// is returned.
     ///
     /// Note: Initialization happens only once per process.
-    pub fn initialize(&self, py: Python) -> &'static TracingInitResult {
-        let result = initialize_tracing(py, self);
+    pub fn initialize(&self) -> &'static TracingInitResult {
+        let result = initialize_tracing(self);
 
         // Warn if already initialized with different config
         if let Some(stored) = result.config()
@@ -137,7 +127,7 @@ impl TracingBridge {
         use crate::context::{extract_context_from_headers, get_trace_headers_from_python};
 
         // Initialize tracing (no-op if already done)
-        self.initialize(py);
+        self.initialize();
 
         get_trace_headers_from_python(py)
             .and_then(|headers| extract_context_from_headers(&headers))
@@ -163,18 +153,7 @@ impl TracingBridge {
 /// any point during the process lifetime and subsequent Rust spans will
 /// follow. If no provider is configured when a span is exported, that span is
 /// dropped silently.
-// `_py: Python` is unused in the body but retained so that
-// `TracingBridge::initialize(&self, py: Python)` — which has been the
-// public entry point since 0.1.x — keeps its signature. Initialization
-// no longer needs to call into Python because the destination span
-// processors are resolved dynamically at export time (see `export.rs`),
-// but we want callers that already hold a `Python<'_>` token to be able
-// to pass it through without ceremony, and we leave room to touch
-// Python again from here in the future without a breaking change.
-pub(crate) fn initialize_tracing(
-    _py: Python,
-    config: &TracingBridge,
-) -> &'static TracingInitResult {
+pub(crate) fn initialize_tracing(config: &TracingBridge) -> &'static TracingInitResult {
     TRACING_INIT_RESULT.get_or_init(|| {
         // Create Resource for the TracerProvider
         let resource = Resource::builder()

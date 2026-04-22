@@ -100,7 +100,7 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
     This is the core guarantee of dynamic span-processor resolution: the
     destination isn't frozen at the first call into the bridge — new
     processors registered later start receiving spans immediately. Before
-    v0.1.3 the Rust side captured the span processors tuple once at init
+    v0.2.0 the Rust side captured the span processors tuple once at init
     time and stored it in a `OnceLock`, so processors added later never
     received spans. This test would have failed against that behavior.
     """
