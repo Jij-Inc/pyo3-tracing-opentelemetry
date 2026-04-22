@@ -7,7 +7,7 @@ use opentelemetry_sdk::{
     Resource,
     trace::{SdkTracerProvider, SimpleSpanProcessor},
 };
-use pyo3::{Py, prelude::*};
+use pyo3::prelude::*;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -19,6 +19,13 @@ pub enum TracingInitResult {
     /// OTel export is active with the given configuration.
     Active(TracingBridge),
     /// Python doesn't have a `TracerProvider` with span processors configured.
+    ///
+    /// As of v0.1.3 this variant is no longer produced: the bridge installs
+    /// its Rust subscriber unconditionally and resolves the destination
+    /// Python `TracerProvider` dynamically on each span export. If Python has
+    /// no provider when a span is exported, the span is dropped silently. The
+    /// variant is kept for backward compatibility so downstream `match` arms
+    /// continue to compile.
     PythonOtelNotConfigured,
     /// Tracing subscriber failed to initialize (already initialized by another library).
     SubscriberAlreadyInitialized,
@@ -130,69 +137,38 @@ impl TracingBridge {
     }
 }
 
-/// Get the span processors from Python's TracerProvider if available.
-///
-/// Note: This uses internal attributes (`_active_span_processor._span_processors`)
-/// because the OpenTelemetry Python SDK does not expose a public API to access
-/// registered span processors. This is the same approach used by other integrations.
-fn get_span_processor_from_python(py: Python) -> Option<Py<PyAny>> {
-    let trace = py.import("opentelemetry.trace").ok()?;
-    let sdk_trace = py.import("opentelemetry.sdk.trace").ok()?;
-    let tracer_provider_class = sdk_trace.getattr("TracerProvider").ok()?;
-
-    let provider = trace.call_method0("get_tracer_provider").ok()?;
-
-    // Check if it's an SDK TracerProvider
-    if !provider.is_instance(&tracer_provider_class).ok()? {
-        return None;
-    }
-
-    // Access _active_span_processor (SynchronousMultiSpanProcessor or ConcurrentMultiSpanProcessor)
-    // then get _span_processors tuple from it
-    let active_processor = provider.getattr("_active_span_processor").ok()?;
-    let span_processors = active_processor.getattr("_span_processors").ok()?;
-
-    // Check if there are any span processors configured
-    let len: usize = span_processors.len().ok()?;
-    if len == 0 {
-        return None;
-    }
-
-    // Return the span_processors tuple - we'll iterate over it in export
-    Some(span_processors.unbind())
-}
-
 /// Initialize tracing with Python's OpenTelemetry configuration.
 ///
 /// Returns `&'static TracingInitResult` indicating the outcome:
-/// - `Active(config)`: OTel export is active with the given configuration
-/// - `PythonOtelNotConfigured`: Python doesn't have a `TracerProvider` with span processors
-/// - `SubscriberAlreadyInitialized`: Tracing subscriber was already initialized by another library
+/// - `Active(config)`: OTel export is active with the given configuration.
+/// - `SubscriberAlreadyInitialized`: Tracing subscriber was already initialized by another library.
 ///
 /// # Important
 ///
 /// Initialization happens only once per process, and the result is cached.
-/// If Python's OTel is not configured on the first call, subsequent calls
-/// will return `PythonOtelNotConfigured` even if Python's OTel is configured later.
 ///
-/// To use this crate, ensure Python's `TracerProvider` with span processors is
-/// configured **before** calling any traced Rust functions.
-pub(crate) fn initialize_tracing(py: Python, config: &TracingBridge) -> &'static TracingInitResult {
+/// Unlike earlier versions, this function **does not** check whether Python's
+/// `TracerProvider` is already configured: it installs the Rust subscriber
+/// unconditionally. The destination Python span processors are resolved
+/// dynamically on every span export (see [`crate::export::PySpanExporter`]),
+/// so Python's `TracerProvider` can be configured, swapped, or torn down at
+/// any point during the process lifetime and subsequent Rust spans will
+/// follow. If no provider is configured when a span is exported, that span is
+/// dropped silently.
+pub(crate) fn initialize_tracing(
+    _py: Python,
+    config: &TracingBridge,
+) -> &'static TracingInitResult {
     TRACING_INIT_RESULT.get_or_init(|| {
-        // Get span processors from Python (only during initialization)
-        let span_processors = match get_span_processor_from_python(py) {
-            Some(sp) => sp,
-            None => return TracingInitResult::PythonOtelNotConfigured,
-        };
-
         // Create Resource for the TracerProvider
         let resource = Resource::builder()
             .with_service_name(config.service_name.to_string())
             .build();
 
-        // Use PySpanExporter to forward spans to Python's span processors
+        // Use PySpanExporter to forward spans to Python's span processors.
+        // It resolves `trace.get_tracer_provider()` dynamically on each call
+        // to `export()`, so the target is not locked in at init time.
         let exporter = PySpanExporter {
-            span_processors,
             resource: resource.clone(),
         };
 

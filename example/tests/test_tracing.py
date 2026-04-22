@@ -91,3 +91,48 @@ def test_traced_with_attributes(span_exporter, tracer, snapshot):
         example_module.traced_with_attributes("test-request", 3)
 
     assert normalize_spans(span_exporter.spans) == snapshot
+
+
+def test_rust_spans_follow_added_span_processor(span_exporter):
+    """Rust spans must follow span processors added to the global `TracerProvider`
+    *after* the tracing bridge has already been initialized.
+
+    This is the core guarantee of dynamic span-processor resolution: the
+    destination isn't frozen at the first call into the bridge — new
+    processors registered later start receiving spans immediately. Before
+    v0.1.3 the Rust side captured the span processors tuple once at init
+    time and stored it in a `OnceLock`, so processors added later never
+    received spans. This test would have failed against that behavior.
+    """
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+    from conftest import TestSpanExporter
+
+    # Force init (if not already) and make sure the baseline exporter works.
+    span_exporter.clear()
+    example_module.traced_function()
+    assert len(span_exporter.spans) > 0, (
+        "Baseline sanity check failed: the session exporter collected no spans"
+    )
+
+    # Now register an additional processor on the same provider.
+    extra = TestSpanExporter()
+    provider = trace.get_tracer_provider()
+    provider.add_span_processor(SimpleSpanProcessor(extra))
+
+    try:
+        span_exporter.clear()
+        example_module.traced_function()
+        assert len(extra.spans) > 0, (
+            "Newly added span processor did not receive Rust spans. "
+            "This indicates the bridge is still using a cached snapshot of "
+            "span processors from initialization time."
+        )
+        # The originally-registered processor continues to receive spans too.
+        assert len(span_exporter.spans) > 0
+    finally:
+        # The SDK has no public remove_span_processor API; shutting the
+        # exporter down prevents the leaked processor from doing work in
+        # subsequent tests.
+        extra.shutdown()
