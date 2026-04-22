@@ -105,6 +105,7 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
     received spans. This test would have failed against that behavior.
     """
     from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
     from conftest import TestSpanExporter
@@ -116,9 +117,13 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
         "Baseline sanity check failed: the session exporter collected no spans"
     )
 
-    # Now register an additional processor on the same provider.
+    # Now register an additional processor on the same provider. The session
+    # fixture installs an SDK TracerProvider; assert that so pyright can
+    # narrow from the abstract `TracerProvider` (no `add_span_processor`) to
+    # the SDK type.
     extra = TestSpanExporter()
     provider = trace.get_tracer_provider()
+    assert isinstance(provider, SdkTracerProvider)
     provider.add_span_processor(SimpleSpanProcessor(extra))
 
     try:
