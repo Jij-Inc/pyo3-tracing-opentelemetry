@@ -108,8 +108,6 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
     from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
-    from conftest import TestSpanExporter
-
     # Force init (if not already) and make sure the baseline exporter works.
     span_exporter.clear()
     example_module.traced_function()
@@ -120,8 +118,9 @@ def test_rust_spans_follow_added_span_processor(span_exporter):
     # Now register an additional processor on the same provider. The session
     # fixture installs an SDK TracerProvider; assert that so pyright can
     # narrow from the abstract `TracerProvider` (no `add_span_processor`) to
-    # the SDK type.
-    extra = TestSpanExporter()
+    # the SDK type. Build the extra exporter from the same class the fixture
+    # gave us so we don't depend on importing `conftest` as a module.
+    extra = type(span_exporter)()
     provider = trace.get_tracer_provider()
     assert isinstance(provider, SdkTracerProvider)
 

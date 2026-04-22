@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-use opentelemetry::{global, trace::TracerProvider as _};
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::{
     Resource,
     trace::{SdkTracerProvider, SimpleSpanProcessor},
@@ -177,17 +177,22 @@ pub(crate) fn initialize_tracing(
             .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
             .build();
 
-        // Create OpenTelemetry layer for tracing.
+        // Create the OpenTelemetry layer. The tracer clones internal Arcs
+        // from the provider, so the pipeline stays alive as long as the
+        // subscriber (and thus the layer) does.
+        //
+        // We intentionally do **not** call
+        // `opentelemetry::global::set_tracer_provider(...)` here. The bridge
+        // routes Rust `tracing` events to Python through the layer we install
+        // below and does not read from OpenTelemetry's Rust-side global. If
+        // the host application has installed its own global tracer provider
+        // (either directly or via another library), overwriting it from here
+        // would clobber its telemetry setup for uses like
+        // `opentelemetry::global::tracer(...)`.
         let otel_layer = OpenTelemetryLayer::new(provider.tracer(config.tracer_name));
 
         // Initialize tracing subscriber with OpenTelemetry layer.
         // Use try_init() to avoid panic if already initialized (e.g., by another library).
-        //
-        // If the subscriber is already installed we must not alter any further
-        // global state: the embedding application (or another library) is in
-        // control of the telemetry pipeline, and silently overwriting the
-        // global OpenTelemetry tracer provider from here would interfere with
-        // it.
         if tracing_subscriber::registry()
             .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
             .with(otel_layer)
@@ -198,10 +203,6 @@ pub(crate) fn initialize_tracing(
             // OTel export won't work unless the embedding app adds the layer manually.
             return TracingInitResult::SubscriberAlreadyInitialized;
         }
-
-        // Only now that we own the subscriber do we install the global
-        // OpenTelemetry tracer provider.
-        global::set_tracer_provider(provider);
 
         TracingInitResult::Active(config.clone())
     })
