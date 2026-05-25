@@ -25,6 +25,15 @@ pub fn extract_context_from_headers(headers: &HashMap<String, String>) -> Option
 }
 
 fn sanitize_traceparent_flags(headers: &HashMap<String, String>) -> HashMap<String, String> {
+    // Compatibility fallback for Rust OpenTelemetry SDKs that only accept the
+    // W3C Trace Context Level 1 sampled flag. Python OpenTelemetry 1.42 can set
+    // the Level 2 random-trace-id flag, e.g. `03` means sampled + random.
+    // Current Rust extraction rejects those headers entirely, so mask them down
+    // to the sampled bit to preserve Python-to-Rust parent propagation.
+    //
+    // This intentionally does not preserve the random-trace-id flag. Remove this
+    // fallback once the Rust OpenTelemetry SDK used here accepts Level 2
+    // trace-flags and can propagate them without dropping the parent context.
     let mut headers = headers.clone();
     let Some(traceparent) = headers.get("traceparent") else {
         return headers;
