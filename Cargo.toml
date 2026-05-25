@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Jij-Inc/pyo3-tracing-opentelemetry"
@@ -14,11 +14,11 @@ repository = "https://github.com/Jij-Inc/pyo3-tracing-opentelemetry"
 [workspace.dependencies]
 anyhow = "1.0"
 futures-util = "0.3"
-opentelemetry = "0.28"
-opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
 pyo3 = { version = "0.27", features = ["anyhow"] }
 pyo3-stub-gen = "0.19"
 tracing = "0.1"
-tracing-opentelemetry = "0.29"
+tracing-opentelemetry = "0.33"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pyo3-tracing-opentelemetry = { path = "pyo3-tracing-opentelemetry" }

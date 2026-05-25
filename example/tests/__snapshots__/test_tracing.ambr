@@ -3,9 +3,10 @@
   list([
     dict({
       'attributes': dict({
-        'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 43,
-        'code.namespace': 'example_module',
+        'code.file.path': 'example/src/lib.rs',
+        'code.line.number': 43,
+        'code.module.name': 'example_module',
+        'target': 'example_module',
       }),
       'id': 'span_0',
       'name': 'inner_span',
@@ -13,9 +14,10 @@
     }),
     dict({
       'attributes': dict({
-        'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 40,
-        'code.namespace': 'example_module',
+        'code.file.path': 'example/src/lib.rs',
+        'code.line.number': 40,
+        'code.module.name': 'example_module',
+        'target': 'example_module',
       }),
       'id': 'span_1',
       'name': 'outer_span',
@@ -34,9 +36,10 @@
   list([
     dict({
       'attributes': dict({
-        'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 28,
-        'code.namespace': 'example_module',
+        'code.file.path': 'example/src/lib.rs',
+        'code.line.number': 28,
+        'code.module.name': 'example_module',
+        'target': 'example_module',
       }),
       'id': 'span_0',
       'name': 'do_work',
@@ -51,9 +54,10 @@
     }),
     dict({
       'attributes': dict({
-        'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 17,
-        'code.namespace': 'example_module',
+        'code.file.path': 'example/src/lib.rs',
+        'code.line.number': 17,
+        'code.module.name': 'example_module',
+        'target': 'example_module',
       }),
       'id': 'span_1',
       'name': 'traced_function_inner',
@@ -65,11 +69,12 @@
   list([
     dict({
       'attributes': dict({
-        'code.filepath': 'example/src/lib.rs',
-        'code.lineno': 57,
-        'code.namespace': 'example_module',
+        'code.file.path': 'example/src/lib.rs',
+        'code.line.number': 57,
+        'code.module.name': 'example_module',
         'count': '3',
         'name': 'test-request',
+        'target': 'example_module',
       }),
       'id': 'span_0',
       'name': 'process_request',

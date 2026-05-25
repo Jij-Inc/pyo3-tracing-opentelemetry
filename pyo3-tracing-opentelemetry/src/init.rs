@@ -47,6 +47,7 @@ impl TracingInitResult {
 
 /// Stores the initialization result.
 static TRACING_INIT_RESULT: OnceLock<TracingInitResult> = OnceLock::new();
+static TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
 
 /// Bridge between Python OpenTelemetry and Rust tracing.
 ///
@@ -169,12 +170,13 @@ pub(crate) fn initialize_tracing(config: &TracingBridge) -> &'static TracingInit
 
         let provider = SdkTracerProvider::builder()
             .with_resource(resource)
-            .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
+            .with_span_processor(SimpleSpanProcessor::new(exporter))
             .build();
 
-        // Create the OpenTelemetry layer. The tracer clones internal Arcs
-        // from the provider, so the pipeline stays alive as long as the
-        // subscriber (and thus the layer) does.
+        // Create the OpenTelemetry layer. Keep the provider alive for the
+        // process lifetime: opentelemetry_sdk 0.32 shuts the provider down
+        // when the last provider handle is dropped, and existing tracers
+        // become no-op after shutdown.
         //
         // We intentionally do **not** call
         // `opentelemetry::global::set_tracer_provider(...)` here. The bridge
@@ -198,6 +200,8 @@ pub(crate) fn initialize_tracing(config: &TracingBridge) -> &'static TracingInit
             // OTel export won't work unless the embedding app adds the layer manually.
             return TracingInitResult::SubscriberAlreadyInitialized;
         }
+
+        let _ = TRACER_PROVIDER.set(provider);
 
         TracingInitResult::Active(config.clone())
     })
