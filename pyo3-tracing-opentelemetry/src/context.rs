@@ -13,7 +13,8 @@ use pyo3::{prelude::*, types::PyDict};
 /// Example: `00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01`
 pub fn extract_context_from_headers(headers: &HashMap<String, String>) -> Option<Context> {
     let propagator = TraceContextPropagator::new();
-    let context = propagator.extract(headers);
+    let sanitized_headers = sanitize_traceparent_flags(headers);
+    let context = propagator.extract(&sanitized_headers);
 
     // Check if the context has a valid span context
     if context.span().span_context().is_valid() {
@@ -21,6 +22,33 @@ pub fn extract_context_from_headers(headers: &HashMap<String, String>) -> Option
     } else {
         None
     }
+}
+
+fn sanitize_traceparent_flags(headers: &HashMap<String, String>) -> HashMap<String, String> {
+    let mut headers = headers.clone();
+    let Some(traceparent) = headers.get("traceparent") else {
+        return headers;
+    };
+
+    let parts = traceparent.split('-').collect::<Vec<_>>();
+    if parts.len() != 4 || parts[0] != "00" || parts[3].len() != 2 {
+        return headers;
+    }
+
+    let Ok(flags) = u8::from_str_radix(parts[3], 16) else {
+        return headers;
+    };
+
+    let sampled = flags & 0x01;
+    if sampled == flags {
+        return headers;
+    }
+
+    headers.insert(
+        "traceparent".to_string(),
+        format!("{}-{}-{}-{sampled:02x}", parts[0], parts[1], parts[2],),
+    );
+    headers
 }
 
 /// Get trace context headers from Python's OpenTelemetry context.
@@ -57,5 +85,43 @@ pub fn get_trace_headers_from_python(py: Python) -> Option<HashMap<String, Strin
         None
     } else {
         Some(headers)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn headers(traceparent: &str) -> HashMap<String, String> {
+        HashMap::from([("traceparent".to_string(), traceparent.to_string())])
+    }
+
+    #[test]
+    fn extracts_context_from_traceparent_with_new_python_flags() {
+        let context = extract_context_from_headers(&headers(
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-03",
+        ))
+        .expect("traceparent with extra flags should still propagate sampled context");
+
+        let span_context = context.span().span_context().clone();
+        assert!(span_context.is_valid());
+        assert_eq!(
+            span_context.trace_id().to_string(),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
+        assert_eq!(span_context.span_id().to_string(), "00f067aa0ba902b7");
+        assert!(span_context.trace_flags().is_sampled());
+    }
+
+    #[test]
+    fn preserves_unsampled_traceparent_with_extra_flags() {
+        let context = extract_context_from_headers(&headers(
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-02",
+        ))
+        .expect("traceparent with extra unsampled flags should still propagate context");
+
+        let span_context = context.span().span_context().clone();
+        assert!(span_context.is_valid());
+        assert!(!span_context.trace_flags().is_sampled());
     }
 }
