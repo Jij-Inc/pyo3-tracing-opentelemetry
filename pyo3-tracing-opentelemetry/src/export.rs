@@ -1,9 +1,9 @@
 //! Span export functionality - converts Rust SpanData to Python ReadableSpan.
 
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
-use futures_util::future::BoxFuture;
 use opentelemetry::trace::SpanKind;
 use opentelemetry_sdk::{
     Resource,
@@ -156,7 +156,7 @@ fn get_current_span_processors(py: Python<'_>) -> Option<Py<PyAny>> {
 }
 
 impl OTelSpanExporter for PySpanExporter {
-    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
+    fn export(&self, batch: Vec<SpanData>) -> impl Future<Output = OTelSdkResult> + Send {
         let mut errors: Vec<String> = Vec::new();
 
         Python::attach(|py| {
@@ -223,14 +223,14 @@ impl OTelSpanExporter for PySpanExporter {
             }
         });
 
-        if errors.is_empty() {
-            Box::pin(std::future::ready(Ok(())))
+        let result = if errors.is_empty() {
+            Ok(())
         } else {
             let msg = errors.join("; ");
-            Box::pin(std::future::ready(Err(
-                opentelemetry_sdk::error::OTelSdkError::InternalFailure(msg),
-            )))
-        }
+            Err(opentelemetry_sdk::error::OTelSdkError::InternalFailure(msg))
+        };
+
+        std::future::ready(result)
     }
 }
 

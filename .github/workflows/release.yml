@@ -13,7 +13,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
@@ -28,7 +28,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
 
@@ -42,7 +42,7 @@ jobs:
           echo "NEW_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "pyo3-tracing-opentelemetry") | .version')" >> $GITHUB_ENV
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           title: "Start developing ${{ env.NEW_VERSION }}"
           branch: "rust-version-update/${{ env.NEW_VERSION }}"
