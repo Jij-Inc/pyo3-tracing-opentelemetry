@@ -1,5 +1,8 @@
 """Pytest configuration for tracing tests."""
 
+import os
+from typing import Sequence
+
 import pytest
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, ReadableSpan
@@ -9,7 +12,6 @@ from opentelemetry.sdk.trace.export import (
     SpanExportResult,
 )
 from opentelemetry.sdk.resources import Resource
-from typing import Sequence
 
 
 class TestSpanExporter(SpanExporter):
@@ -44,6 +46,8 @@ def setup_test_tracing():
     All tests share the same provider and use exporter.clear() for isolation.
     """
     global _test_exporter, _test_provider
+
+    os.environ["RUST_LOG"] = "info"
 
     _test_exporter = TestSpanExporter()
     resource = Resource.create({"service.name": "example-module-test"})
