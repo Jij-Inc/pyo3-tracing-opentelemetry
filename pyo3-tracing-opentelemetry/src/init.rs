@@ -169,7 +169,7 @@ pub(crate) fn initialize_tracing(config: &TracingBridge) -> &'static TracingInit
 
         let provider = SdkTracerProvider::builder()
             .with_resource(resource)
-            .with_span_processor(SimpleSpanProcessor::new(Box::new(exporter)))
+            .with_span_processor(SimpleSpanProcessor::new(exporter))
             .build();
 
         // Create the OpenTelemetry layer. The tracer clones internal Arcs
