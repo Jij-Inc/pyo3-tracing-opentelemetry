@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.14.0,<2.0"]
+requires = ["maturin>=1.14.1,<2.0"]
 build-backend = "maturin"
 
 [project]
@@ -13,8 +13,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "pytest>=9.1.0",
-    "maturin>=1.14.0,<2.0",
+    "pytest>=9.1.1",
+    "maturin>=1.14.1,<2.0",
     "syrupy>=5.3.2",
     "pyright>=1.1.410",
 ]
