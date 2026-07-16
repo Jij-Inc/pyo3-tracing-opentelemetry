@@ -12,11 +12,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/Jij-Inc/pyo3-tracing-opentelemetry"
 
 [workspace.dependencies]
-anyhow = "1.0"
 futures-util = "0.3"
 opentelemetry = "0.32"
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
-pyo3 = { version = "0.27", features = ["anyhow"] }
+pyo3 = "0.27"
 pyo3-stub-gen = "0.23"
 tracing = "0.1"
 tracing-opentelemetry = "0.33"

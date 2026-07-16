@@ -10,7 +10,6 @@ keywords = ["pyo3", "tracing", "opentelemetry", "python"]
 categories = ["development-tools::profiling", "api-bindings"]
 
 [dependencies]
-anyhow.workspace = true
 futures-util.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
