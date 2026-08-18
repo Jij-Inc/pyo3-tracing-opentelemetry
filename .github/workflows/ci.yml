@@ -66,6 +66,7 @@ jobs:
       - name: Check stub files are up-to-date
         run: |
           cargo run -p pyo3-tracing-opentelemetry-example --features stub_gen --bin stub_gen
+          uvx ruff check --fix example_module.pyi
           uvx ruff format
           git diff --exit-code example_module.pyi
         if: always()

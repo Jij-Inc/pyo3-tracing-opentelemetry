@@ -20,6 +20,8 @@ tasks:
     desc: Generate stub files (*.pyi) from Rust code
     cmds:
       - cargo run --bin stub_gen --features=stub_gen
+      - uvx ruff check --fix example_module.pyi
+      - uvx ruff format
 
   format:
     desc: Format Python code
