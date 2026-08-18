@@ -4,7 +4,6 @@ from opentelemetry.sdk.trace import ReadableSpan
 
 import example_module
 
-
 # Attributes that vary between runs and should be excluded from snapshots
 UNSTABLE_ATTRIBUTES = {"busy_ns", "idle_ns", "thread.id"}
 
