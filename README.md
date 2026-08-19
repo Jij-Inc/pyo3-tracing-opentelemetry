@@ -16,7 +16,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-pyo3-tracing-opentelemetry = "0.2"
+pyo3-tracing-opentelemetry = "0.3"
 ```
 
 ## Usage
@@ -110,7 +110,7 @@ with tracer.start_as_current_span("python-parent"):
 ## Requirements
 
 - Rust 2024 edition
-- PyO3 0.27+
+- PyO3 0.27–0.29
 - Python with `opentelemetry-sdk` installed
 
 ## License

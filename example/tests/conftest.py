@@ -1,17 +1,17 @@
 """Pytest configuration for tracing tests."""
 
 import os
-from typing import Sequence
+from collections.abc import Sequence
 
 import pytest
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider, ReadableSpan
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
     SpanExporter,
     SpanExportResult,
 )
-from opentelemetry.sdk.resources import Resource
 
 
 class TestSpanExporter(SpanExporter):
