@@ -46,7 +46,26 @@ jobs:
       - run: cargo test
 
   example:
+    name: Python ${{ matrix.python }} / PyO3 ${{ matrix.pyo3 }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        pyo3: ["0.30.1"]
+        numpy: ["0.30.0"]
+        include:
+          - python: "3.10"
+            pyo3: "0.27.2"
+            numpy: "0.27.1"
+          - python: "3.13"
+            pyo3: "0.28.3"
+            numpy: "0.28.0"
+          - python: "3.14"
+            pyo3: "0.29.3"
+            numpy: "0.29.0"
+    env:
+      UV_PYTHON: ${{ matrix.python }}
     defaults:
       run:
         working-directory: example
@@ -57,6 +76,24 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      - name: Select PyO3 version
+        run: |
+          cargo update -p numpy --precise ${{ matrix.numpy }}
+          cargo update -p pyo3 --precise ${{ matrix.pyo3 }}
+          cargo tree --invert pyo3@${{ matrix.pyo3 }}
+
+      - name: Build and sync Python package
+        run: uv sync --locked --reinstall-package example-module
+
+      - name: Select Python for Rust builds
+        run: |
+          echo "PYO3_PYTHON=$PWD/.venv/bin/python" >> "$GITHUB_ENV"
+          uv run --no-sync python -c 'import os, sys; print(sys.version); assert sys.version_info.releaselevel == "final"; assert sys.version_info[:2] == tuple(map(int, os.environ["UV_PYTHON"].split(".")))'
+
+      - name: Run Rust tests
+        run: cargo test --workspace --all-features --locked
 
       - run: uvx ruff format --check
         if: always()
@@ -71,13 +108,27 @@ jobs:
           git diff --exit-code example_module.pyi
         if: always()
 
-      - name: Build and sync Python package
-        run: uv sync
-
       - name: Run pyright
-        run: uv run pyright
+        run: uv run --no-sync pyright
         if: always()
 
       - name: Run pytest
-        run: uv run pytest -v
+        run: uv run --no-sync pytest -v
         if: always()
+
+      - name: Build and test Python 3.15 distribution
+        if: matrix.python == '3.15'
+        run: |
+          uv build --sdist --out-dir "$RUNNER_TEMP/distributions"
+          uv build "$RUNNER_TEMP"/distributions/*.tar.gz --wheel --out-dir "$RUNNER_TEMP/distributions"
+          uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheel, = (Path(os.environ["RUNNER_TEMP"]) / "distributions").glob("*.whl")
+          with ZipFile(wheel) as archive:
+              assert archive.read("example_module/__init__.pyi") == Path("example_module.pyi").read_bytes()
+              assert "example_module/py.typed" in archive.namelist()
+          PY
+          uv run --no-sync --with "$RUNNER_TEMP"/distributions/*.whl pytest -v

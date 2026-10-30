@@ -1,6 +1,11 @@
 """Tests for pyo3-tracing-opentelemetry integration using snapshot testing."""
 
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
+from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags, TraceState
 
 import example_module
 
@@ -77,11 +82,98 @@ def test_trace_context_propagation(span_exporter, tracer):
 
     parent_trace_id = parent_span.get_span_context().trace_id
 
+    assert {span.name for span in span_exporter.spans} == {
+        "python-parent",
+        "traced_function_inner",
+        "do_work",
+    }
+
     # All spans should have the same trace_id
     for span in span_exporter.spans:
         assert span.context.trace_id == parent_trace_id, (
             f"Span '{span.name}' has different trace_id"
         )
+
+    spans = {span.name: span for span in span_exporter.spans}
+    assert (
+        spans["traced_function_inner"].parent.span_id
+        == parent_span.get_span_context().span_id
+    )
+    assert (
+        spans["do_work"].parent.span_id
+        == spans["traced_function_inner"].context.span_id
+    )
+
+
+@pytest.mark.parametrize("sampled", [False, True])
+def test_remote_context_and_sampling(span_exporter, sampled):
+    """Preserve W3C IDs, tracestate and sampling across detached Rust work."""
+    parent = SpanContext(
+        trace_id=0x4BF92F3577B34DA6A3CE929D0E0E4736,
+        span_id=0x00F067AA0BA902B7,
+        is_remote=True,
+        trace_flags=TraceFlags(TraceFlags.SAMPLED if sampled else TraceFlags.DEFAULT),
+        trace_state=TraceState([("vendor", "opaque-value")]),
+    )
+    with trace.use_span(NonRecordingSpan(parent)):
+        assert example_module.traced_function() == 42
+        assert trace.get_current_span().get_span_context() == parent
+
+    if sampled:
+        spans = {span.name: span for span in span_exporter.spans}
+        assert set(spans) == {"traced_function_inner", "do_work"}
+        assert spans["traced_function_inner"].parent.span_id == parent.span_id
+        for span in spans.values():
+            assert span.context.trace_id == parent.trace_id
+            assert span.context.trace_state == parent.trace_state
+            assert span.context.trace_flags.sampled
+    else:
+        assert span_exporter.spans == []
+
+    # The Rust ContextGuard must not leave the remote parent attached.
+    span_exporter.clear()
+    assert example_module.traced_function() == 42
+    root = next(s for s in span_exporter.spans if s.name == "traced_function_inner")
+    assert root.parent is None
+    assert root.context.trace_id != parent.trace_id
+
+
+def test_context_isolation_between_threads(span_exporter, tracer):
+    """Each Python caller keeps its own parent while Rust releases Python."""
+
+    def run(index):
+        with tracer.start_as_current_span(f"python-{index}") as parent:
+            assert example_module.traced_function() == 42
+            assert trace.get_current_span() is parent
+            return parent.get_span_context()
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        parents = list(executor.map(run, range(12)))
+
+    assert len({parent.trace_id for parent in parents}) == len(parents)
+    rust_spans = [s for s in span_exporter.spans if s.name == "traced_function_inner"]
+    assert len(rust_spans) == len(parents)
+    assert {(s.context.trace_id, s.parent.span_id) for s in rust_spans} == {
+        (parent.trace_id, parent.span_id) for parent in parents
+    }
+
+
+def test_exported_span_metadata(span_exporter):
+    """Exercise Python SDK object construction, including 128-bit IDs and events."""
+    assert example_module.traced_function() == 42
+    spans = {span.name: span for span in span_exporter.spans}
+    assert set(spans) == {"traced_function_inner", "do_work"}
+    for span in spans.values():
+        assert span.context.is_valid
+        assert span.start_time > 0
+        assert span.end_time >= span.start_time
+        assert span.resource.attributes["service.name"] == "example-module"
+        assert span.instrumentation_scope.name == "example-module"
+        assert span.kind == trace.SpanKind.INTERNAL
+        assert span.status.status_code == trace.StatusCode.UNSET
+        assert span.events
+        assert all(span.start_time <= e.timestamp <= span.end_time for e in span.events)
+    assert spans["traced_function_inner"].events[-1].attributes["result"] == 42
 
 
 def test_traced_with_attributes(span_exporter, tracer, snapshot):
