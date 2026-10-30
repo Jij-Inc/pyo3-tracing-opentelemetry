@@ -11,7 +11,7 @@ const TRACING: TracingBridge = TracingBridge::new("example-module");
 fn traced_function(py: Python<'_>) -> PyResult<i32> {
     let _guard = TRACING.attach_parent_context(py);
 
-    Ok(traced_function_inner())
+    Ok(py.detach(traced_function_inner))
 }
 
 #[tracing::instrument]

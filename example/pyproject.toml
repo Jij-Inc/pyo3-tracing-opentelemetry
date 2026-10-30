@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "example-module"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "opentelemetry-api>=1.44.0",
     "opentelemetry-sdk>=1.20",
@@ -21,3 +21,5 @@ dev = [
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+# Keep the stub beside the relocated pyproject.toml in workspace sdists.
+include = [{ path = "example_module.pyi", format = "sdist" }]

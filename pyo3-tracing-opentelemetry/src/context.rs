@@ -96,4 +96,29 @@ mod tests {
         assert!(span_context.is_valid());
         assert!(!span_context.trace_flags().is_sampled());
     }
+
+    #[test]
+    fn preserves_tracestate() {
+        let mut carrier = headers("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        carrier.insert("tracestate".into(), "vendor=opaque-value,other=123".into());
+        let context = extract_context_from_headers(&carrier).unwrap();
+        let span = context.span();
+        assert!(span.span_context().is_remote());
+        assert_eq!(
+            span.span_context().trace_state().header(),
+            "vendor=opaque-value,other=123"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_or_missing_traceparent() {
+        for carrier in [
+            HashMap::new(),
+            headers("invalid"),
+            headers("00-00000000000000000000000000000000-00f067aa0ba902b7-01"),
+            headers("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01"),
+        ] {
+            assert!(extract_context_from_headers(&carrier).is_none());
+        }
+    }
 }

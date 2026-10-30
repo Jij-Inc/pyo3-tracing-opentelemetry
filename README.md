@@ -110,8 +110,19 @@ with tracer.start_as_current_span("python-parent"):
 ## Requirements
 
 - Rust 2024 edition
-- PyO3 0.27–0.29
-- Python with `opentelemetry-sdk` installed
+- PyO3 `>=0.27, <0.31` (including 0.30.1)
+- Python 3.11+ with `opentelemetry-sdk` installed; use PyO3 0.30.1 for Python 3.15
+
+CI tests Python 3.15 with the PyO3 version in `Cargo.lock`.
+
+The example releases Python with `Python::detach` during Rust work and
+reattaches when exporting spans. Run it on Python 3.15 with:
+
+```sh
+cd example
+uv sync --python 3.15
+uv run --no-sync pytest -v
+```
 
 ## License
 
