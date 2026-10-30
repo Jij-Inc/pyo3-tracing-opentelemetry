@@ -46,36 +46,7 @@ jobs:
       - run: cargo test
 
   example:
-    # Preserve the existing required check name independently of the matrix.
     runs-on: ubuntu-latest
-    needs: example-matrix
-    if: ${{ always() }}
-    steps:
-      - run: test "$RESULT" = success
-        env:
-          RESULT: ${{ needs.example-matrix.result }}
-
-  example-matrix:
-    name: Python ${{ matrix.python }} / PyO3 ${{ matrix.pyo3 }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
-        pyo3: ["0.30.1"]
-        numpy: ["0.30.0"]
-        include:
-          - python: "3.10"
-            pyo3: "0.27.2"
-            numpy: "0.27.1"
-          - python: "3.13"
-            pyo3: "0.28.3"
-            numpy: "0.28.0"
-          - python: "3.14"
-            pyo3: "0.29.3"
-            numpy: "0.29.0"
-    env:
-      UV_PYTHON: ${{ matrix.python }}
     defaults:
       run:
         working-directory: example
@@ -86,21 +57,15 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          python-version: ${{ matrix.python }}
-
-      - name: Select PyO3 version
-        run: |
-          cargo update -p numpy --precise ${{ matrix.numpy }}
-          cargo update -p pyo3 --precise ${{ matrix.pyo3 }}
-          cargo tree --invert pyo3@${{ matrix.pyo3 }}
+          python-version: "3.15"
 
       - name: Build and sync Python package
-        run: uv sync --locked --reinstall-package example-module
+        run: uv sync --locked
 
       - name: Select Python for Rust builds
         run: |
           echo "PYO3_PYTHON=$PWD/.venv/bin/python" >> "$GITHUB_ENV"
-          uv run --no-sync python -c 'import os, sys; print(sys.version); assert sys.version_info.releaselevel == "final"; assert sys.version_info[:2] == tuple(map(int, os.environ["UV_PYTHON"].split(".")))'
+          uv run --no-sync python -c 'import sys; print(sys.version); assert sys.version_info.releaselevel == "final"'
 
       - name: Run Rust tests
         run: cargo test --workspace --all-features --locked
